@@ -164,6 +164,10 @@ type LabelRecord = {
    *  row's `show` channel. */
   show: boolean;
   fontSize: number;
+  /** Extra space between characters in ems. Per label (MapLibre's
+   *  `text-letter-spacing` is data-driven) and baked into the glyph quads, so
+   *  a change re-lays out the label. */
+  letterSpacing: number;
   addHeight: number;
   colorHex: number;
   opacity: number;
@@ -887,6 +891,7 @@ export class BatchedSdfTextMesh
       // No text yet, so nothing is shown regardless of `requestedShow`.
       show: false,
       fontSize: material.size ?? 16.0,
+      letterSpacing: material.letterSpacing ?? 0,
       addHeight: material.height ?? 0.0,
       colorHex: material.color ?? 0xffffff,
       opacity: clamp01(material.opacity ?? 1.0),
@@ -1061,13 +1066,13 @@ export class BatchedSdfTextMesh
 
   // --- Glyph runs ---
 
-  private _layoutOptions(record: LabelRecord, text: string): LayoutOptions {
+  private _layoutOptions(record: LabelRecord): LayoutOptions {
     return {
-      text,
       maxWidth: this._maxWidth,
       lineHeight: this._lineHeight,
       textAlign: this._textAlign,
       spreadGlyphs: this._resolveOrientation(record.batchIndex).spreadGlyphs,
+      letterSpacing: record.letterSpacing,
     };
   }
 
@@ -1106,10 +1111,7 @@ export class BatchedSdfTextMesh
       return;
     }
 
-    const layout = buildLabelLayout(
-      shapeResult,
-      this._layoutOptions(record, text),
-    );
+    const layout = buildLabelLayout(shapeResult, this._layoutOptions(record));
 
     record.widthEm = layout.widthEm;
     record.heightEm = layout.heightEm;
@@ -1728,6 +1730,9 @@ export class BatchedSdfTextMesh
       colorHex !== (prevMaterial.color ?? 0xffffff) ||
       opacity !== clamp01(prevMaterial.opacity ?? 1.0);
     const fontSizeChanged = fontSize !== (prevMaterial.size ?? 16.0);
+    const letterSpacing = material.letterSpacing ?? 0;
+    const letterSpacingChanged =
+      letterSpacing !== (prevMaterial.letterSpacing ?? 0);
     const addHeightChanged = addHeight !== (prevMaterial.height ?? 0);
     const mat = this.material as ShaderMaterial;
     const rotationDeg = material.rotation ?? 0;
@@ -1796,6 +1801,7 @@ export class BatchedSdfTextMesh
         record.fontSize = fontSize;
         this._writeFontSize(record);
       }
+      if (letterSpacingChanged) record.letterSpacing = letterSpacing;
       if (addHeightChanged) {
         record.addHeight = addHeight;
         this._writeAddHeight(record);
@@ -1807,7 +1813,7 @@ export class BatchedSdfTextMesh
         record.requestedText = materialText;
         this._clearDeferred(record);
         this._applyText(record, materialText);
-      } else if (forceUpdate || layoutChanged) {
+      } else if (forceUpdate || layoutChanged || letterSpacingChanged) {
         // Font or layout changed — re-lay-out existing text.
         this._applyText(record, record.text);
       }
@@ -1870,6 +1876,11 @@ export class BatchedSdfTextMesh
     }
 
     this._clearDeferred(record);
+    // Prepared text that is already showing is already laid out: whatever else
+    // the layout bakes in (spacing, glyph pieces, font) re-lays out from its own
+    // setter. Zoom-dependent styles re-run the evaluator for every label on
+    // every zoom step, so this skips a shaping pass per label per step.
+    if (text === record.text) return;
     this._applyText(record, text);
     this._markDeclutterDirty();
     this._needRender?.();
@@ -2048,6 +2059,32 @@ export class BatchedSdfTextMesh
       this._writeFontSize(record);
     }
     this._markDeclutterDirty();
+  }
+
+  /**
+   * Letter spacing for one feature, in ems, overriding the material's. Unlike
+   * size this is baked into the glyph quads, so a real change re-lays the
+   * label out; an unchanged value is a no-op, because zoom-dependent styles
+   * re-run the evaluator for every label on every zoom step.
+   */
+  setFeatureLetterSpacingByBatchIndex(batchIndex: number, ems: number) {
+    if (!Number.isFinite(ems)) return;
+    let changed = false;
+    for (const instanceIndex of this._instancesOfBatchIndex(batchIndex)) {
+      const record = this._ensureLabel(instanceIndex);
+      if (!record || record.letterSpacing === ems) continue;
+      record.letterSpacing = ems;
+      // Text still being prepared or parked picks the value up when its
+      // `_applyText` eventually runs.
+      if (record.text) {
+        this._applyText(record, record.text);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this._markDeclutterDirty();
+      this._needRender?.();
+    }
   }
 
   setFeatureOpacityByBatchIndex(batchIndex: number, opacity: number) {
