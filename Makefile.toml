@@ -68,7 +68,9 @@ run_task = { name = ["test-rust", "test-web"], parallel = true }
 #                         HOT-RELOAD DEVELOPMENT TASKS
 # ============================================================================
 [tasks.dev]
-run_task = { name = ["watch", "dev-web"], parallel = true }
+# Starts the Vue SDK validation example (web/vue-example) plus the crate watcher:
+# editing crates/ auto-rebuilds the WASM modules, then just reload the page.
+run_task = { name = ["watch", "dev-web-vue"], parallel = true }
 
 [tasks.web]
 # Build WASM in release mode, but web is built in dev mode to improve development experience on Web.

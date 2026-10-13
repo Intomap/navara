@@ -52,3 +52,5 @@ externals
 *.sw?
 
 promo-captures/*
+
+.codebuddy/

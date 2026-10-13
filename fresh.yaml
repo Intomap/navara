@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e11]:
+      - generic [ref=e12]:
+        - heading "Navara SDK · Vue 验证环境" [level=1] [ref=e13]
+        - generic [ref=e14]: 就绪
+      - generic [ref=e16]:
+        - heading "相机" [level=2] [ref=e17]
+        - button "飞行到东京站" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - heading "图层" [level=2] [ref=e22]
+        - button "添加 GeoJSON 拉伸多边形" [ref=e23] [cursor=pointer]
+        - button "重着色（update 合并语义）" [disabled] [ref=e27]
+        - button "删除图层与数据源" [disabled] [ref=e34]
+      - generic [ref=e38]: 在此追加你的验证项：新增按钮 → 在 useNavaraView.ts 中补一个 action。
+    - generic [ref=e45]:
+      - generic [ref=e46]: lng 139.74500
+      - generic [ref=e47]: lat 35.65800
+      - generic [ref=e48]: height 30.0 km
+  - button "Show attributions" [ref=e50] [cursor=pointer]

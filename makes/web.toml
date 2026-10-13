@@ -12,6 +12,13 @@ pnpm dev
 ''']
 dependencies = ["install-deps-web"]
 
+[tasks.dev-web-vue]
+description = "Run the Vue SDK validation example (web/vue-example) in dev mode"
+script = ['''
+pnpm -C web/vue-example dev
+''']
+dependencies = ["install-deps-web"]
+
 [tasks.build-web-example]
 script = ['''
 pnpm build:example
