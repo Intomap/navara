@@ -23,6 +23,7 @@ const alias = {
   "@navaramap/three-csm": pkgSrc("navara_three_csm"),
   "@navaramap/three-default-descs": pkgSrc("navara_three_default_descs"),
   "@navaramap/three-default-plugin": pkgSrc("navara_three_default_plugin"),
+  "@navaramap/three-plugins": pkgSrc("navara_three_plugins"),
   "@navaramap/maplibre-style": pkgSrc("navara_maplibre_style"),
   "@navaramap/worker": pkgSrc("navara_worker"),
 };

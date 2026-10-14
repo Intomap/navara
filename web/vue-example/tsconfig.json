@@ -14,6 +14,7 @@
       "@navaramap/three-csm": ["../navara_three_csm/src"],
       "@navaramap/three-default-descs": ["../navara_three_default_descs/src"],
       "@navaramap/three-default-plugin": ["../navara_three_default_plugin/src"],
+      "@navaramap/three-plugins": ["../navara_three_plugins/src"],
       "@navaramap/maplibre-style": ["../navara_maplibre_style/src"],
       "@navaramap/worker": ["../navara_worker/src"]
     }

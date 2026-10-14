@@ -12,9 +12,11 @@
   },
   "license": "MIT OR Apache-2.0",
   "dependencies": {
+    "@navaramap/maplibre-style": "workspace:*",
     "@navaramap/three": "workspace:*",
     "@navaramap/three-default-descs": "workspace:*",
     "@navaramap/three-default-plugin": "workspace:*",
+    "@navaramap/three-plugins": "workspace:*",
     "lucide-vue-next": "^0.544.0",
     "postprocessing": "6.39.4",
     "three": "0.185.1",

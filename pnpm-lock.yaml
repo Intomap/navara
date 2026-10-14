@@ -580,6 +580,9 @@ importers:
 
   web/vue-example:
     dependencies:
+      '@navaramap/maplibre-style':
+        specifier: workspace:*
+        version: link:../navara_maplibre_style
       '@navaramap/three':
         specifier: workspace:*
         version: link:../navara_three
@@ -589,6 +592,9 @@ importers:
       '@navaramap/three-default-plugin':
         specifier: workspace:*
         version: link:../navara_three_default_plugin
+      '@navaramap/three-plugins':
+        specifier: workspace:*
+        version: link:../navara_three_plugins
       lucide-vue-next:
         specifier: ^0.544.0
         version: 0.544.0(vue@3.5.43(typescript@6.0.3))
