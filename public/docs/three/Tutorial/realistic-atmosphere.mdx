@@ -1,0 +1,423 @@
+---
+title: Realistic Atmosphere
+description: Realistic visual rendering using atmospheric effects
+sidebar:
+  order: 210
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+![Result](@assets/tutorial/realistic-atmosphere-result.png)
+
+**What you will learn in this tutorial:**
+- Adding Aerial Perspective effects
+- Configuring sky, sun, and star descriptors
+- Adding cloud effects
+- Setting up tone mapping
+- Adding rain and snow effects
+- Rendering water surfaces from the terrain water mask
+
+## Setup
+
+This tutorial builds on the project from [Getting Started](../../../guides/introduction/getting-started/).
+
+In addition, this tutorial imports Descriptor types such as `CloudsEffectDesc` and `RainMeshDesc` from `@navaramap/three-default-descs`.
+
+<Tabs syncKey="pkg">
+
+<TabItem label="npm">
+
+```bash
+npm install @navaramap/three-default-descs
+```
+
+</TabItem>
+
+<TabItem label="yarn">
+
+```bash
+yarn add @navaramap/three-default-descs
+```
+
+</TabItem>
+
+<TabItem label="pnpm">
+
+```bash
+pnpm add @navaramap/three-default-descs
+```
+
+</TabItem>
+
+</Tabs>
+
+## Adding the Aerial Perspective Effect
+
+Aerial Perspective applies a haze and atmospheric depth effect based on distance. Once `DefaultPlugin` is registered, `addDefaultPhotorealScene()` builds the whole photorealistic scene in one call. That covers the sky, sunlight, stars, skylight probe, atmospheric effects, tone mapping, and anti-aliasing.
+
+```typescript
+import ThreeView from "@navaramap/three";
+import { DefaultPlugin, type DefaultDescriptions } from "@navaramap/three-default-plugin";
+
+const plugin = new DefaultPlugin();
+const view = new ThreeView<DefaultDescriptions>({ shadow: true });
+view.addPlugin(plugin);
+await view.init();
+
+const layers = plugin.addDefaultPhotorealScene({
+  deferredLighting: true,
+  shadow: true,
+  specular: true,
+});
+
+const photoSource = view.addSource({
+  // Credit:
+  // - Geospatial Information Authority of Japan Tiles - Latest Nationwide Photo (Seamless)
+  //   https://maps.gsi.go.jp/development/ichiran.html
+  type: "raster-tile",
+  url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+  maxZoom: 18,
+});
+view.addLayer({
+  type: "raster",
+  source: photoSource,
+});
+
+const terrainSource = view.addSource({
+  type: "quantized-mesh",
+  url: "https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain",
+  requestVertexNormals: true,
+  requestWaterMask: true,
+  maxZoom: 18,
+});
+view.addLayer({
+  type: "terrain",
+  source: terrainSource,
+  terrain: {
+    castShadow: true,
+    receiveShadow: true,
+  },
+});
+
+// A morning sun rakes the clouds from the side, so they read as volumes rather
+// than flat white patches.
+view.atmosphere.date = new Date("2026-06-22T08:00:00+09:00");
+
+// Above the cloud tops: the whole cloud field is laid out over the city.
+view.setCamera({ lng: 139.7511, lat: 35.6736, height: 4200, heading: -100, pitch: -22, roll: 0 });
+```
+
+Enable shadows on the sunlight:
+
+```typescript
+layers.sun.update({ sun: { castShadow: true } });
+```
+
+`shadow: true` in `addDefaultPhotorealScene` applies these shadows in the deferred lighting, and `specular: true` adds the sun's highlight on reflective materials. The shadows in this tutorial's screenshots are **cloud** shadows.
+
+:::caution[irradiance is deferred lighting, so pair it with `view.lit = false`]
+`deferredLighting: true` sets `irradiance` and `view.lit = false` together. `irradiance` does not add a light. It re-lights the G-buffer from the precomputed atmosphere **after** the geometry is drawn, which only works if the materials wrote plain albedo. That is what [`view.lit = false`](../../../three/api/threeview-properties/#lit) does. Left at its default `true`, lighting is applied twice (forward pass + atmosphere).
+
+Two things the deferred pass does **not** cover:
+
+- **Cast shadows from `sun.castShadow`**, unless the aerial perspective's `shadow` option is on as above. Cloud shadows are sampled from the atmosphere and need no option, but they do need `irradiance`.
+- **Transparent materials**, already blended into the colour buffer and so impossible to re-light.
+
+Close-up scenes that depend on either should keep `irradiance: false` and the default `view.lit`.
+:::
+
+## Setting Up Tone Mapping
+
+Configure tone mapping's exposure for a natural HDR look. This scene is lit by the atmosphere through `irradiance`, which comes out brighter than a forward-lit scene, so it settles around `6` where a normally lit scene sits nearer `10`.
+
+```typescript
+view.toneMappingExposure = 6;
+```
+
+## Adding Cloud Effects
+
+`qualityPreset: "high"` sharpens the cloud detail and `lightShafts: true` adds god rays through the layer. Adjust shadows and density from there.
+
+```typescript
+const clouds = view.addEffect<CloudsEffectDesc>({
+  clouds: {
+    qualityPreset: "high",
+    lightShafts: true,
+  },
+});
+
+clouds.update({ clouds: { shadows: true } });
+```
+
+![Result](@assets/tutorial/realistic-atmosphere.png)
+
+## Adding Rain Effects
+
+Rain effects use a combination of two objects. `RainMeshDesc` renders 3D raindrop particles in the scene, and `RainDropEffectDesc` provides a post-processing effect of water droplets on the screen.
+
+### 3D Raindrop Particles
+
+```typescript
+// Enable the animation loop to keep rain animation running
+view.animation = true;
+
+const rain = view.addMesh<RainMeshDesc>({
+  rain: {
+    particleCount: 5000,
+    speed: 0.0015,
+    opacity: 1.0,
+    width: 3, // m
+    height: 60.0, // m
+    areaWidth: 500, // m
+    areaHeight: 1000, // m
+    maxHeight: 10000, // m. See the note under the snow section
+  },
+});
+
+view.setCamera({ lng: 139.7511, lat: 35.6736, height: 700, heading: -100, pitch: 3, roll: 0 });
+```
+
+### Screen Water Droplet Effect
+
+`dropSizeFactor` and `dropGridSize` set the frequency of the droplet grid, not the droplet radius, so **lower** values give bigger drops. Raise `dropDensity` to keep the screen from looking empty once the drops are large.
+
+```typescript
+const rainDropEffect = view.addEffect<RainDropEffectDesc>({
+  rainDrop: {
+    opacity: 0.8,
+    dropGridSize: 12,
+    dropDensity: 0.7,
+    dropSizeFactor: 0.018,
+  },
+});
+```
+
+![Result](@assets/tutorial/realistic-atmosphere-rain.png)
+
+## Adding Snow Effects
+
+Remove the rain object and add `SnowMeshDesc` instead.
+
+```typescript
+const snow = view.addMesh<SnowMeshDesc>({
+  snow: {
+    particleCount: 10000,
+    speed: 0.00005,
+    size: 20,
+    opacity: 1,
+    areaWidth: 400,
+    areaHeight: 800,
+    maxHeight: 3000,
+    movementStrength: { x: 50, y: 20, z: 50 },
+    movementSpeed: { x: 0.0005, y: 0.0002, z: 0.0005 },
+  },
+});
+```
+
+:::note[Snow fades out with camera altitude]
+`maxHeight` is not a spawn ceiling. It scales the snow's opacity by `1 - cameraHeight / maxHeight` every frame. With the default `3000`, a camera at or above 3 km renders no visible snow at all. Keep the camera inside the weather (the 700 m view set in the rain section above), or raise `maxHeight` to match the altitude you are shooting from.
+:::
+
+:::caution[Performance Note]
+Increasing `particleCount` makes the effect more realistic, but may impact performance on mobile devices.
+:::
+
+![Result](@assets/tutorial/realistic-atmosphere-snow.png)
+
+## Adding Water Surfaces (Terrain Water Mask)
+
+Cesium quantized-mesh tiles can carry a **water mask** next to the mesh. Request it with `requestWaterMask: true` on the source and Navara shades the masked pixels as water. The result is a reflective, low-roughness surface that catches the sun glint and picks up environment and [SSR](#combining-with-ssr-screen-space-reflections) reflections. No extra source or layer is needed.
+
+```typescript
+const terrainSource = view.addSource({
+  type: "quantized-mesh",
+  url: "https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain",
+  requestVertexNormals: true,
+  requestWaterMask: true,
+  maxZoom: 18,
+});
+view.addLayer({
+  type: "terrain",
+  source: terrainSource,
+  terrain: { castShadow: true, receiveShadow: true },
+});
+
+view.atmosphere.date = new Date("2026-01-01T16:15:00+09:00");
+view.toneMappingExposure = 12;
+
+view.setCamera({ lng: 139.88, lat: 35.42, height: 2800, heading: 250, pitch: -16, roll: 0 });
+```
+
+![Result](@assets/tutorial/realistic-atmosphere-water.png)
+
+:::note[Water mask coverage]
+The mask marks open water (seas, lakes, and wide rivers) at tile resolution. Narrow inland water such as a castle moat may fall below that resolution and stay unmasked.
+:::
+
+### Combining with SSR (Screen Space Reflections)
+
+Adding `SSREffectDesc` enables real-time reflections of buildings and other objects on the water surface.
+
+```typescript
+const plateauSource = view.addSource({
+  // Credit:
+  // - 3D City Model (Project PLATEAU) Chuo Ward (FY2023) - MLIT PLATEAU
+  //   https://www.geospatial.jp/ckan/dataset/plateau-13102-chuo-ku-2023
+  type: "3d-tiles",
+  url: "https://assets.cms.plateau.reearth.io/assets/4c/f2436a-e2be-40e2-83da-f1781f36e30b/13102_chuo-ku_pref_2023_citygml_1_op_bldg_3dtiles_13102_chuo-ku_lod2_no_texture/tileset.json",
+});
+view.addLayer({
+  type: "3d-tiles",
+  source: plateauSource,
+  model: {
+    show: true,
+    color: new Color().setStyle("#ffffff"),
+    metalness: 0,
+    roughness: 0.5,
+    castShadow: true,
+    receiveShadow: true,
+  },
+});
+
+view.addEffect<SSREffectDesc>({
+  ssr: {},
+});
+
+view.toneMappingExposure = 6;
+view.atmosphere.date = new Date("2026-06-22T08:00:00+09:00");
+
+view.setCamera({
+  lng: 139.7868,
+  lat: 35.6733,
+  height: 68,
+  heading: 240,
+  pitch: -10,
+  roll: 0,
+});
+```
+
+![Result](@assets/tutorial/realistic-atmosphere-ssr.png)
+
+## Complete Example
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import { type CloudsEffectDesc, type RainDropEffectDesc, type RainMeshDesc, type SnowMeshDesc, type SSREffectDesc, ToneMappingMode } from "@navaramap/three-default-descs";
+import { DefaultPlugin, type DefaultDescriptions } from "@navaramap/three-default-plugin";
+
+const plugin = new DefaultPlugin();
+const view = new ThreeView<DefaultDescriptions>({
+  shadow: true,
+  animation: true,
+});
+view.addPlugin(plugin);
+await view.init();
+
+const layers = plugin.addDefaultPhotorealScene({
+  deferredLighting: true,
+  shadow: true,
+  specular: true,
+});
+
+const photoSource = view.addSource({
+  // Credit:
+  // - Geospatial Information Authority of Japan Tiles - Latest Nationwide Photo (Seamless)
+  //   https://maps.gsi.go.jp/development/ichiran.html
+  type: "raster-tile",
+  url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+  maxZoom: 18,
+});
+view.addLayer({
+  type: "raster",
+  source: photoSource,
+});
+
+const terrainSource = view.addSource({
+  type: "quantized-mesh",
+  url: "https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain",
+  requestVertexNormals: true,
+  requestWaterMask: true,
+  maxZoom: 18,
+});
+view.addLayer({
+  type: "terrain",
+  source: terrainSource,
+  terrain: {
+    castShadow: true,
+    receiveShadow: true,
+  },
+});
+
+layers.sun.update({ sun: { castShadow: true } });
+
+layers.toneMapping.update({ toneMapping: { mode: ToneMappingMode.AGX } });
+view.toneMappingExposure = 6;
+
+const clouds = view.addEffect<CloudsEffectDesc>({
+  clouds: {
+    qualityPreset: "high",
+    lightShafts: true,
+  },
+});
+
+clouds.update({ clouds: { shadows: true } });
+
+view.addMesh<RainMeshDesc>({
+  rain: {
+    particleCount: 5000,
+    speed: 0.0015,
+    opacity: 1.0,
+    width: 3,
+    height: 60.0,
+    areaWidth: 500,
+    areaHeight: 1000,
+    maxHeight: 10000,
+  },
+});
+
+view.addEffect<RainDropEffectDesc>({
+  rainDrop: {
+    opacity: 0.8,
+    dropGridSize: 12,
+    dropDensity: 0.7,
+    dropSizeFactor: 0.018,
+  },
+});
+
+const plateauSource = view.addSource({
+  // Credit:
+  // - 3D City Model (Project PLATEAU) Chuo Ward (FY2023) - MLIT PLATEAU
+  //   https://www.geospatial.jp/ckan/dataset/plateau-13102-chuo-ku-2023
+  type: "3d-tiles",
+  url: "https://assets.cms.plateau.reearth.io/assets/4c/f2436a-e2be-40e2-83da-f1781f36e30b/13102_chuo-ku_pref_2023_citygml_1_op_bldg_3dtiles_13102_chuo-ku_lod2_no_texture/tileset.json",
+});
+view.addLayer({
+  type: "3d-tiles",
+  source: plateauSource,
+  model: {
+    show: true,
+    color: new Color().setStyle("#ffffff"),
+    metalness: 0,
+    roughness: 0.5,
+    castShadow: true,
+    receiveShadow: true,
+  },
+});
+
+view.addEffect<SSREffectDesc>({
+  ssr: {
+  },
+});
+
+view.atmosphere.date = new Date("2026-01-01T16:15:00+09:00");
+view.toneMappingExposure = 12;
+
+view.setCamera({ lng: 139.88, lat: 35.42, height: 2800, heading: 250, pitch: -16, roll: 0 });
+```
+
+:::tip[Tips for a Natural Look]
+- **3D Tiles models**: Adjust `roughness`/`metalness` and properly enable `castShadow`/`receiveShadow`
+- **Time of day adjustment**: Set the time with an ISO string including a timezone offset, e.g. `new Date("2026-01-01T08:00:00+09:00")`
+- **Weather switching**: Rain and snow can be toggled using the `.visible` property
+- **Water surface adjustment**: Adjust wave motion with `waterSpeed` and `waterScaleNormal`
+:::

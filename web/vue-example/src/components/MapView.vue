@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { disposeNavaraView, mountNavaraView } from "../composables/useNavaraView";
+import { DEFAULT_EXAMPLE } from "../composables/useExampleGallery";
+import { detachActiveExample, mountGallery } from "../composables/scene";
 
 const container = ref<HTMLElement | null>(null);
 
 onMounted(async () => {
-  if (container.value) await mountNavaraView(container.value);
+  if (container.value) {
+    await mountGallery(container.value, DEFAULT_EXAMPLE);
+  }
 });
 
 onBeforeUnmount(() => {
-  disposeNavaraView();
+  detachActiveExample();
 });
 </script>
 

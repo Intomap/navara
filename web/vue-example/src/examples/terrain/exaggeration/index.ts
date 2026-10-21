@@ -1,0 +1,91 @@
+import ThreeView, {
+  Color,
+  TERRARIUM_ELEVATION_DECODER,
+} from "@navaramap/three";
+import {
+  DefaultPlugin,
+  type DefaultDescriptions,
+} from "@navaramap/three-default-plugin";
+
+import type { ExampleMeta } from "../../sections";
+import type { ExampleContext, ExampleRunResult } from "../../types";
+
+export const meta: ExampleMeta = {
+  section: "terrain",
+  order: 6,
+  title: { en: "Terrain Exaggeration", ja: "地形の強調" },
+  description: {
+    en: "Exaggerate terrain relief vertically.",
+    ja: "地形の起伏を垂直方向に強調する。",
+  },
+  docs: "three/material/terrain-material#exaggeration",
+};
+
+export async function run(
+  ctx: ExampleContext,
+): Promise<ExampleRunResult> {
+  const view = new ThreeView<DefaultDescriptions>({
+    backgroundColor: new Color().setStyle("#cccccc"),
+  });
+
+  const defaultPlugin = new DefaultPlugin();
+  view.addPlugin(defaultPlugin);
+
+  await view.init();
+
+  view.atmosphere.date = new Date("2026-07-16T15:00:00Z");
+  view.addLight({ ambient: { intensity: 1.0 } });
+  view.addLight({ sun: { intensity: 3.0, applyColor: true } });
+
+  view.setCamera({
+    lng: 7.6586,
+    lat: 45.9763,
+    height: 8500,
+    distance: 10000,
+    heading: 240,
+    pitch: -20,
+    roll: 0,
+  });
+
+  const dem = view.addSource({
+    type: "raster-dem",
+    url: "https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png",
+    elevationDecoder: TERRARIUM_ELEVATION_DECODER(),
+    tileSize: 512,
+    maxZoom: 15,
+    minZoom: 5,
+  });
+
+  const terrain = view.addLayer({
+    type: "terrain",
+    source: dem,
+    terrain: { exaggeration: 2.5 },
+  });
+
+  view.addLayer({
+    type: "raster",
+    source: dem,
+    hillshade: { exaggeration: 0.5 },
+  });
+
+  ctx.ui.addSlider(
+    "Exaggeration",
+    { min: 1, max: 3, value: 2.5, step: 0.1, unit: "×" },
+    (exaggeration) => {
+      terrain.update({ terrain: { exaggeration } });
+    },
+  );
+
+  view.attribution?.add([
+    {
+      attribution: "Re:Earth Terrain",
+      attributionUrl: "https://terrain.reearth.land/",
+    },
+    {
+      attribution: "© Mapterhorn",
+      attributionUrl: "https://mapterhorn.com/attribution",
+    },
+  ]);
+
+  return { view };
+}

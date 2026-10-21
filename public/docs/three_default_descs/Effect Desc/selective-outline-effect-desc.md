@@ -1,0 +1,283 @@
+---
+title: SelectiveOutlineEffectDesc
+description: Selective outline effect descriptor for navara_three_default_descs
+sidebar:
+  order: 62
+---
+
+The `SelectiveOutlineEffectDesc` class is a Descriptor that applies a selective outline effect. It uses mask-based filtering to draw outlines only on specific objects. It highlights object contours using edge detection with a Sobel filter.
+
+## Properties
+
+### visible
+
+**Type:** `boolean | undefined`
+
+**Description:** Controls the visibility of the effect descriptor.
+
+**Default:** `true`
+
+### color
+
+**Type:** `Color | undefined`
+
+**Description:** Specifies the outline color as a `Color`.
+
+**Default:** `0xffffff`
+
+**Example:**
+
+```typescript
+import { Color } from "@navaramap/three";
+
+{
+  selectiveOutline: {
+    color: new Color().setStyle("#ff0000"),
+  }
+}
+```
+
+### thickness
+
+**Type:** `number | undefined`
+
+**Description:** Specifies the thickness of the outline.
+
+**Default:** `1.0`
+
+**Example:**
+
+```typescript
+{
+  selectiveOutline: {
+    thickness: 2.0,
+  }
+}
+```
+
+### edgeStrength
+
+**Type:** `number | undefined`
+
+**Description:** Specifies the edge detection strength. Higher values emphasize edges more.
+
+**Default:** `1.0`
+
+**Example:**
+
+```typescript
+{
+  selectiveOutline: {
+    edgeStrength: 1.5,
+  }
+}
+```
+
+### resolutionScale
+
+**Type:** `number | undefined`
+
+**Description:** Specifies the rendering resolution scale factor. Lower values improve performance.
+
+**Default:** `1.0`
+
+**Example:**
+
+```typescript
+{
+  selectiveOutline: {
+    resolutionScale: 0.5,
+  }
+}
+```
+
+## Applying the Effect to Objects
+
+To apply the selective outline effect to specific objects, specify the outline effect descriptor's ID in the target object's `effectIds` property.
+
+### effectIds
+
+An array of selective effect descriptor IDs to apply to the target object. When an outline effect descriptor is added, a unique ID is assigned, and the effect is applied by specifying this ID in the target object's `effectIds`.
+
+## Usage Examples
+
+### Adding a basic selective outline
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import {
+  BoxMeshDesc,
+  SelectiveOutlineEffectDesc,
+} from "@navaramap/three-default-descs";
+
+const view = new ThreeView();
+await view.init();
+
+// Add selective outline effect descriptor
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xffffff),
+    thickness: 1.0,
+    edgeStrength: 1.0,
+  },
+});
+
+// Apply outline effect to an object
+const cubeDesc = view.addMesh<BoxMeshDesc>({
+  box: {
+    width: 100,
+    height: 100,
+    depth: 100,
+    color: new Color().setHex(0x0088ff),
+    effectIds: [outlineDesc.id], // Apply outline effect
+  },
+  position: { x: 0, y: 0, z: 1000 },
+});
+```
+
+### Adding a colored outline
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import { SelectiveOutlineEffectDesc } from "@navaramap/three-default-descs";
+import { DefaultPlugin } from "@navaramap/three-default-plugin";
+
+const view = new ThreeView();
+const plugin = new DefaultPlugin();
+view.addPlugin(plugin);
+await view.init();
+
+plugin.addDefaultPhotorealScene();
+
+// Add a thick red outline
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xff0000),
+    thickness: 2.5,
+    edgeStrength: 1.5,
+  },
+});
+```
+
+### Performance-oriented settings
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import { SelectiveOutlineEffectDesc } from "@navaramap/three-default-descs";
+
+const view = new ThreeView();
+await view.init();
+
+// Performance-oriented settings
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xffffff),
+    thickness: 1.0,
+    edgeStrength: 1.0,
+    resolutionScale: 0.5, // Lower resolution for improved performance
+  },
+});
+```
+
+### Dynamic outline effect updates
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import { SelectiveOutlineEffectDesc } from "@navaramap/three-default-descs";
+
+const view = new ThreeView();
+await view.init();
+
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xffffff),
+    thickness: 1.0,
+  },
+});
+
+// Update parameters later
+outlineDesc.update({
+  selectiveOutline: {
+    color: new Color().setHex(0x00ff00), // Green
+    thickness: 2.0,
+  },
+});
+```
+
+### Applying outlines to 3D Tiles
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import { SelectiveOutlineEffectDesc } from "@navaramap/three-default-descs";
+
+const view = new ThreeView();
+await view.init();
+
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xff0000),
+    thickness: 2.0,
+  },
+});
+
+// Apply outline to 3D Tiles buildings
+const buildingsSource = view.addSource({
+  type: "3d-tiles",
+  url: "https://example.com/tileset.json",
+});
+
+const buildingsLayer = view.addLayer({
+  type: "3d-tiles",
+  source: buildingsSource,
+  model: {
+    show: true,
+    color: new Color().setHex(0xffffff),
+    effectIds: [outlineDesc.id],
+  },
+});
+```
+
+### Combining bloom and outline
+
+```typescript
+import ThreeView, { Color } from "@navaramap/three";
+import {
+  BoxMeshDesc,
+  SelectiveBloomEffectDesc,
+  SelectiveOutlineEffectDesc,
+} from "@navaramap/three-default-descs";
+
+const view = new ThreeView();
+await view.init();
+
+const bloomDesc = view.addEffect<SelectiveBloomEffectDesc>({
+  selectiveBloom: {
+    strength: 1.0,
+  },
+});
+
+const outlineDesc = view.addEffect<SelectiveOutlineEffectDesc>({
+  selectiveOutline: {
+    color: new Color().setHex(0xff0000),
+    thickness: 2.0,
+  },
+});
+
+// Apply both effects
+const cubeDesc = view.addMesh<BoxMeshDesc>({
+  box: {
+    width: 100,
+    height: 100,
+    depth: 100,
+    color: new Color().setHex(0xff0000),
+    emissiveIntensity: 1.0,
+    effectIds: [bloomDesc.id, outlineDesc.id], // Apply both
+  },
+  position: { x: 0, y: 0, z: 1000 },
+});
+```
+
+## Notes
+
+- The selective outline effect draws object contours using edge detection with a Sobel filter.
+- It is suitable for highlighting or focusing on selected objects.

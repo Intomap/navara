@@ -25,6 +25,19 @@ body,
   overflow: hidden;
 }
 
+/*
+ * The ThreeView constructor appends its own full-viewport root div to
+ * <body> (after #app). Without this rule it sits below the app shell in
+ * document flow and the canvas never becomes visible. Pin it over the map
+ * area at z-index 1: above the shell background (z auto) so it receives
+ * pointer events, below the gallery panels (z 10+) so they stay interactive.
+ */
+#navara-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
