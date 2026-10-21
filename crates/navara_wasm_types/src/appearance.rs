@@ -50,6 +50,21 @@ fn parse_facing(field: &str, value: &Option<String>) -> Option<navara_material::
     }
 }
 
+/// Parse a JS-facing line cap name, warning on an unknown value so the caller
+/// keeps the material's current value.
+fn parse_line_cap(value: &Option<String>) -> Option<navara_material::LineCap> {
+    let name = value.as_ref()?;
+    match navara_material::LineCap::parse(name) {
+        Some(cap) => Some(cap),
+        None => {
+            bevy_log::warn!(
+                "cap: unknown value {name:?} (expected \"butt\", \"round\" or \"square\")"
+            );
+            None
+        }
+    }
+}
+
 /// Parse a JS-facing placement name, warning on an unknown value so the caller
 /// keeps the material's current value.
 fn parse_placement(value: &Option<String>) -> Option<navara_material::Placement> {
@@ -72,15 +87,22 @@ pub struct PointMaterial {
     /// size in pixels/meters (units are determined by `sizeInMeters`).
     pub size: Option<f32>,
     pub color: Option<u32>,
-    /// Whether the point stands up (`"upright"`, the default) or lies on the
-    /// globe surface around its anchor (`"flat"`). Pair with
-    /// `rotateWithCamera`.
+    /// Plane the point lies in: the screen (`"upright"`, never foreshortened)
+    /// or the globe surface around its anchor (`"flat"`), as MapLibre's
+    /// `icon-pitch-alignment` `viewport` and `map`. Pair with
+    /// `rotateWithCamera`. Left unset, it is `"flat"` when `rotateWithCamera`
+    /// resolves to `false` and `"upright"` otherwise, as MapLibre resolves
+    /// `auto`.
     #[wasm_bindgen(getter_with_clone, js_name = pointFacing)]
     #[serde(rename = "pointFacing")]
     pub point_facing: Option<String>,
-    /// Whether the point turns to follow the camera. `true` (the default)
-    /// keeps it facing the viewer. `false` freezes it in the anchor's local
-    /// east-north-up frame, so moving the camera never reorients it.
+    /// Whether the point turns with the camera or with the map, as MapLibre's
+    /// `icon-rotation-alignment` `viewport` and `map`. `true` keeps it reading left to right
+    /// (a screen-aligned billboard, or a flat quad yawed to the camera).
+    /// `false` aligns it with the map: upright, it stays on screen but turns
+    /// with the camera heading so its x-axis points east; flat, it lies
+    /// north-up. Left unset, it is `true` for `placement: "point"` and `false`
+    /// along a line, as MapLibre resolves `auto`.
     #[wasm_bindgen(js_name = rotateWithCamera)]
     #[serde(rename = "rotateWithCamera")]
     pub rotate_with_camera: Option<bool>,
@@ -124,10 +146,10 @@ pub struct PointMaterial {
     #[wasm_bindgen(js_name = depthTest)]
     #[serde(rename = "depthTest")]
     pub depth_test: Option<bool>,
-    /// Whether faces seen from behind are culled. Default is false, so a
-    /// quad frozen in its anchor's frame (`rotateWithCamera: false`) stays
-    /// visible from behind. Turn it on to hide a flat quad's parts that wrap
-    /// over the horizon, which face away from the camera.
+    /// Whether faces seen from behind are culled. Default is false. Only a
+    /// flat quad has a back the camera can see: turn it on to hide the parts
+    /// of a large one that wrap over the horizon, which face away from the
+    /// camera.
     #[wasm_bindgen(js_name = backfaceCulling)]
     #[serde(rename = "backfaceCulling")]
     pub backface_culling: Option<bool>,
@@ -173,9 +195,8 @@ impl From<PointMaterial> for navara_material::PointMaterial {
         navara_material::PointMaterial {
             show: val.show.unwrap_or(default.show),
             size: val.size.unwrap_or(default.size),
-            point_facing: parse_facing("pointFacing", &val.point_facing)
-                .unwrap_or(default.point_facing),
-            rotate_with_camera: val.rotate_with_camera.unwrap_or(default.rotate_with_camera),
+            point_facing: parse_facing("pointFacing", &val.point_facing),
+            rotate_with_camera: val.rotate_with_camera,
             rotation: val.rotation.unwrap_or(default.rotation),
             placement: parse_placement(&val.placement).unwrap_or(default.placement),
             spacing: val.spacing.unwrap_or(default.spacing),
@@ -205,8 +226,8 @@ impl<'a> From<&'a navara_material::PointMaterial> for PointMaterial {
         PointMaterial {
             show: Some(value.show),
             size: Some(value.size),
-            point_facing: Some(value.point_facing.as_str().to_string()),
-            rotate_with_camera: Some(value.rotate_with_camera),
+            point_facing: value.point_facing.map(|f| f.as_str().to_string()),
+            rotate_with_camera: value.rotate_with_camera,
             rotation: Some(value.rotation),
             placement: Some(value.placement.as_str().to_string()),
             spacing: Some(value.spacing),
@@ -237,9 +258,8 @@ impl PointMaterial {
             show: self.show.unwrap_or(other.show),
             size: self.size.unwrap_or(other.size),
             color: self.color.unwrap_or(other.color),
-            point_facing: parse_facing("pointFacing", &self.point_facing)
-                .unwrap_or(other.point_facing),
-            rotate_with_camera: self.rotate_with_camera.unwrap_or(other.rotate_with_camera),
+            point_facing: parse_facing("pointFacing", &self.point_facing).or(other.point_facing),
+            rotate_with_camera: self.rotate_with_camera.or(other.rotate_with_camera),
             rotation: self.rotation.unwrap_or(other.rotation),
             placement: parse_placement(&self.placement).unwrap_or(other.placement),
             spacing: self.spacing.unwrap_or(other.spacing),
@@ -278,15 +298,22 @@ pub struct BillboardMaterial {
     /// size in pixels/meters (units are determined by `sizeInMeters`).
     pub size: Option<f32>,
     pub color: Option<u32>,
-    /// Whether the sprite stands up (`"upright"`, the default) or lies on the
-    /// globe surface around its anchor (`"flat"`). Pair with
-    /// `rotateWithCamera`.
+    /// Plane the sprite lies in: the screen (`"upright"`, never foreshortened)
+    /// or the globe surface around its anchor (`"flat"`), as MapLibre's
+    /// `icon-pitch-alignment` `viewport` and `map`. Pair with
+    /// `rotateWithCamera`. Left unset, it is `"flat"` when `rotateWithCamera`
+    /// resolves to `false` and `"upright"` otherwise, as MapLibre resolves
+    /// `auto`.
     #[wasm_bindgen(getter_with_clone, js_name = billboardFacing)]
     #[serde(rename = "billboardFacing")]
     pub billboard_facing: Option<String>,
-    /// Whether the sprite turns to follow the camera. `true` (the default)
-    /// keeps it facing the viewer. `false` freezes it in the anchor's local
-    /// east-north-up frame, so moving the camera never reorients it.
+    /// Whether the sprite turns with the camera or with the map, as MapLibre's
+    /// `icon-rotation-alignment` `viewport` and `map`. `true` keeps it reading left to right
+    /// (a screen-aligned billboard, or a flat quad yawed to the camera).
+    /// `false` aligns it with the map: upright, it stays on screen but turns
+    /// with the camera heading so its x-axis points east; flat, it lies
+    /// north-up. Left unset, it is `true` for `placement: "point"` and `false`
+    /// along a line, as MapLibre resolves `auto`.
     #[wasm_bindgen(js_name = rotateWithCamera)]
     #[serde(rename = "rotateWithCamera")]
     pub rotate_with_camera: Option<bool>,
@@ -333,10 +360,10 @@ pub struct BillboardMaterial {
     #[wasm_bindgen(js_name = depthTest)]
     #[serde(rename = "depthTest")]
     pub depth_test: Option<bool>,
-    /// Whether faces seen from behind are culled. Default is false, so a
-    /// quad frozen in its anchor's frame (`rotateWithCamera: false`) stays
-    /// visible from behind. Turn it on to hide a flat quad's parts that wrap
-    /// over the horizon, which face away from the camera.
+    /// Whether faces seen from behind are culled. Default is false. Only a
+    /// flat quad has a back the camera can see: turn it on to hide the parts
+    /// of a large one that wrap over the horizon, which face away from the
+    /// camera.
     #[wasm_bindgen(js_name = backfaceCulling)]
     #[serde(rename = "backfaceCulling")]
     pub backface_culling: Option<bool>,
@@ -387,9 +414,8 @@ impl From<BillboardMaterial> for navara_material::BillboardMaterial {
             show: val.show.unwrap_or(default.show),
             size: val.size.unwrap_or(default.size),
             color: val.color.unwrap_or(default.color),
-            billboard_facing: parse_facing("billboardFacing", &val.billboard_facing)
-                .unwrap_or(default.billboard_facing),
-            rotate_with_camera: val.rotate_with_camera.unwrap_or(default.rotate_with_camera),
+            billboard_facing: parse_facing("billboardFacing", &val.billboard_facing),
+            rotate_with_camera: val.rotate_with_camera,
             rotation: val.rotation.unwrap_or(default.rotation),
             placement: parse_placement(&val.placement).unwrap_or(default.placement),
             spacing: val.spacing.unwrap_or(default.spacing),
@@ -422,8 +448,8 @@ impl<'a> From<&'a navara_material::BillboardMaterial> for BillboardMaterial {
             size: Some(value.size),
             color: Some(value.color),
             center: Some(value.center.into()),
-            billboard_facing: Some(value.billboard_facing.as_str().to_string()),
-            rotate_with_camera: Some(value.rotate_with_camera),
+            billboard_facing: value.billboard_facing.map(|f| f.as_str().to_string()),
+            rotate_with_camera: value.rotate_with_camera,
             rotation: Some(value.rotation),
             placement: Some(value.placement.as_str().to_string()),
             spacing: Some(value.spacing),
@@ -458,8 +484,8 @@ impl BillboardMaterial {
             size: self.size.unwrap_or(other.size),
             color: self.color.unwrap_or(other.color),
             billboard_facing: parse_facing("billboardFacing", &self.billboard_facing)
-                .unwrap_or(other.billboard_facing),
-            rotate_with_camera: self.rotate_with_camera.unwrap_or(other.rotate_with_camera),
+                .or(other.billboard_facing),
+            rotate_with_camera: self.rotate_with_camera.or(other.rotate_with_camera),
             rotation: self.rotation.unwrap_or(other.rotation),
             placement: parse_placement(&self.placement).unwrap_or(other.placement),
             spacing: self.spacing.unwrap_or(other.spacing),
@@ -494,9 +520,13 @@ pub struct TextMaterial {
     pub size: Option<f32>,
     pub color: Option<u32>,
     pub center: Option<Vec2>,
-    /// Whether the label stands up (`"upright"`, the default) or lies on the
-    /// globe surface around its anchor (`"flat"`), following its curvature so
-    /// it reads as painted on the surface. Pair with `rotateWithCamera`.
+    /// Plane the label lies in: the screen (`"upright"`, never foreshortened)
+    /// or the globe surface around its anchor (`"flat"`), following its
+    /// curvature so it reads as painted on the surface. MapLibre's
+    /// `text-pitch-alignment` `viewport` and `map`. Pair with
+    /// `rotateWithCamera`. Left unset, it is `"flat"` when `rotateWithCamera`
+    /// resolves to `false` and `"upright"` otherwise, as MapLibre resolves
+    /// `auto`.
     #[wasm_bindgen(getter_with_clone, js_name = textFacing)]
     #[serde(rename = "textFacing")]
     pub text_facing: Option<String>,
@@ -504,14 +534,20 @@ pub struct TextMaterial {
     /// degrees, clockwise seen from the front. Applied on top of whatever
     /// orientation `textFacing` and `rotateWithCamera` resolve to: it spins a
     /// billboard on screen and turns a surface label like a compass bearing.
-    /// `center` decides where inside the text the pivot sits. Defaults to
-    /// `0.0`.
+    /// `center` decides where inside the text the pivot sits. Along a line
+    /// each glyph spins about its own point on the line, as MapLibre's
+    /// `text-rotate` does, except for a straight label (`rotateWithCamera`
+    /// without `spreadGlyphs`), which turns as a whole. Defaults to `0.0`.
     pub rotation: Option<f32>,
-    /// Whether the label turns to follow the camera. `true` (the default)
-    /// keeps it facing the viewer. `false` freezes it in the anchor's local
-    /// east-north-up frame, so moving the camera never reorients it: with
-    /// `textFacing: "upright"` it becomes a signboard standing on the
-    /// surface, with `"flat"` a north-up label painted on it.
+    /// Whether the label turns with the camera or with the map, as MapLibre's
+    /// `text-rotation-alignment` `viewport` and `map`. `true` keeps it reading
+    /// left to right (a screen-aligned billboard, or a flat label yawed to the
+    /// camera). `false` aligns it with the map: upright, it stays on screen but
+    /// turns with the camera heading so its x-axis points east; flat, it lies
+    /// north-up. Along a line, `false` makes the label follow the line, and
+    /// `true` draws it straight at its anchor unless `spreadGlyphs` is set.
+    /// Left unset, it is `true` for `placement: "point"` and `false` along a
+    /// line, as MapLibre resolves `auto`.
     #[wasm_bindgen(js_name = rotateWithCamera)]
     #[serde(rename = "rotateWithCamera")]
     pub rotate_with_camera: Option<bool>,
@@ -548,10 +584,10 @@ pub struct TextMaterial {
     pub keep_upright: Option<bool>,
     /// Place each glyph of an along-line label on its own instead of each
     /// word. With `rotateWithCamera: false` each glyph turns with the line
-    /// under it (MapLibre's `symbol-placement: "line"`); with `true` (the
-    /// default), each glyph turns to the camera like a point label and is
-    /// spaced on the screen (MapLibre's `viewport-glyph`). Can be overridden
-    /// per feature from a feature evaluator. Defaults to `false`.
+    /// under it (MapLibre's `symbol-placement: "line"`); with `true`, each
+    /// glyph turns to the camera like a point label and is spaced on the
+    /// screen (MapLibre's `viewport-glyph`). Can be overridden per feature
+    /// from a feature evaluator. Defaults to `false`.
     #[wasm_bindgen(js_name = spreadGlyphs)]
     #[serde(rename = "spreadGlyphs")]
     pub spread_glyphs: Option<bool>,
@@ -573,10 +609,10 @@ pub struct TextMaterial {
     #[wasm_bindgen(js_name = depthTest)]
     #[serde(rename = "depthTest")]
     pub depth_test: Option<bool>,
-    /// Whether faces seen from behind are culled. Default is false, so a
-    /// quad frozen in its anchor's frame (`rotateWithCamera: false`) stays
-    /// visible from behind. Turn it on to hide a flat quad's parts that wrap
-    /// over the horizon, which face away from the camera.
+    /// Whether faces seen from behind are culled. Default is false. Only a
+    /// flat quad has a back the camera can see: turn it on to hide the parts
+    /// of a large one that wrap over the horizon, which face away from the
+    /// camera.
     #[wasm_bindgen(js_name = backfaceCulling)]
     #[serde(rename = "backfaceCulling")]
     pub backface_culling: Option<bool>,
@@ -715,9 +751,8 @@ impl From<TextMaterial> for navara_material::TextMaterial {
             size: val.size.unwrap_or(default.size),
             color: val.color.unwrap_or(default.color),
             center: val.center.unwrap_or(default.center.into()).into(),
-            text_facing: parse_facing("textFacing", &val.text_facing)
-                .unwrap_or(default.text_facing),
-            rotate_with_camera: val.rotate_with_camera.unwrap_or(default.rotate_with_camera),
+            text_facing: parse_facing("textFacing", &val.text_facing),
+            rotate_with_camera: val.rotate_with_camera,
             rotation: val.rotation.unwrap_or(default.rotation),
             placement: parse_placement(&val.placement).unwrap_or(default.placement),
             spacing: val.spacing.unwrap_or(default.spacing),
@@ -774,8 +809,8 @@ impl<'a> From<&'a navara_material::TextMaterial> for TextMaterial {
             size: Some(value.size),
             color: Some(value.color),
             center: Some(value.center.into()),
-            text_facing: Some(value.text_facing.as_str().to_string()),
-            rotate_with_camera: Some(value.rotate_with_camera),
+            text_facing: value.text_facing.map(|f| f.as_str().to_string()),
+            rotate_with_camera: value.rotate_with_camera,
             rotation: Some(value.rotation),
             placement: Some(value.placement.as_str().to_string()),
             spacing: Some(value.spacing),
@@ -829,8 +864,8 @@ impl TextMaterial {
             size: self.size.unwrap_or(other.size),
             color: self.color.unwrap_or(other.color),
             center: self.center.unwrap_or(other.center.into()).into(),
-            text_facing: parse_facing("textFacing", &self.text_facing).unwrap_or(other.text_facing),
-            rotate_with_camera: self.rotate_with_camera.unwrap_or(other.rotate_with_camera),
+            text_facing: parse_facing("textFacing", &self.text_facing).or(other.text_facing),
+            rotate_with_camera: self.rotate_with_camera.or(other.rotate_with_camera),
             rotation: self.rotation.unwrap_or(other.rotation),
             placement: parse_placement(&self.placement).unwrap_or(other.placement),
             spacing: self.spacing.unwrap_or(other.spacing),
@@ -902,6 +937,20 @@ pub struct PolylineMaterial {
     #[wasm_bindgen(js_name = maxWidth)]
     #[serde(rename = "maxWidth")]
     pub max_width: Option<f32>,
+    /// Alternating dash and gap lengths, in multiples of the line width,
+    /// repeated along the line. The pattern's period is the sum of the
+    /// entries, so an odd-length array ends in a dash that runs into the first
+    /// one. An empty array draws a solid line, which is the default.
+    #[wasm_bindgen(getter_with_clone, js_name = dashArray)]
+    #[serde(rename = "dashArray")]
+    pub dash_array: Option<Vec<f32>>,
+    /// Shape of the ends of the line and of its dashes: `"butt"` (the
+    /// default), `"round"` or `"square"`. `"round"` adds a half circle one
+    /// half line width in radius beyond both ends of the line and of every
+    /// dash, so a zero-length dash becomes a dot. `"square"` extends the ends
+    /// of the line by half a line width and leaves the dashes' ends square.
+    #[wasm_bindgen(getter_with_clone)]
+    pub cap: Option<String>,
     #[wasm_bindgen(js_name = clampToGround)]
     #[serde(rename = "clampToGround")]
     pub clamp_to_ground: Option<bool>,
@@ -974,6 +1023,8 @@ impl PolylineMaterial {
             height,
             width,
             max_width,
+            dash_array: None,
+            cap: None,
             geometry_types: None,
             __internal__,
             effect_ids: None,
@@ -999,6 +1050,8 @@ impl PolylineMaterial {
             color: self.color.unwrap_or(other.color),
             width: self.width.unwrap_or(other.width),
             max_width: self.max_width.unwrap_or(other.max_width),
+            dash_array: self.dash_array.clone().or_else(|| other.dash_array.clone()),
+            cap: parse_line_cap(&self.cap).unwrap_or(other.cap),
             clamp_to_ground: self.clamp_to_ground.unwrap_or(other.clamp_to_ground),
             tiled: self.tiled.unwrap_or(other.tiled),
             height: self.height.unwrap_or(other.height),
@@ -1030,6 +1083,8 @@ impl From<PolylineMaterial> for navara_material::PolylineMaterial {
             color: val.color.unwrap_or(default.color),
             width: val.width.unwrap_or(default.width),
             max_width: val.max_width.unwrap_or(default.max_width),
+            cap: parse_line_cap(&val.cap).unwrap_or(default.cap),
+            dash_array: val.dash_array.or(default.dash_array),
             clamp_to_ground: val.clamp_to_ground.unwrap_or(default.clamp_to_ground),
             tiled: val.tiled.unwrap_or(default.tiled),
             height: val.height.unwrap_or(default.height),
@@ -1055,6 +1110,8 @@ impl<'a> From<&'a navara_material::PolylineMaterial> for PolylineMaterial {
             color: Some(value.color),
             width: Some(value.width),
             max_width: Some(value.max_width),
+            dash_array: value.dash_array.clone(),
+            cap: Some(value.cap.as_str().to_string()),
             clamp_to_ground: Some(value.clamp_to_ground),
             tiled: Some(value.tiled),
             height: Some(value.height),
@@ -1080,6 +1137,8 @@ impl From<navara_material::PolylineMaterial> for PolylineMaterial {
             color: Some(value.color),
             width: Some(value.width),
             max_width: Some(value.max_width),
+            cap: Some(value.cap.as_str().to_string()),
+            dash_array: value.dash_array,
             clamp_to_ground: Some(value.clamp_to_ground),
             tiled: Some(value.tiled),
             height: Some(value.height),
@@ -2279,13 +2338,28 @@ mod test {
 
     #[test]
     fn merge_keeps_the_previous_facing_when_unspecified() {
-        let other = navara_material::TextMaterial {
-            text_facing: Facing::Flat,
-            rotate_with_camera: false,
+        let previous = navara_material::TextMaterial {
+            text_facing: Some(Facing::Flat),
+            rotate_with_camera: Some(false),
             ..Default::default()
         };
-        let merged = TextMaterial::from(&other).merge(&Default::default());
-        assert_eq!(merged.text_facing, Facing::Flat);
-        assert!(!merged.rotate_with_camera);
+        let merged = TextMaterial::from(&navara_material::TextMaterial::default()).merge(&previous);
+        assert_eq!(merged.text_facing, Some(Facing::Flat));
+        assert_eq!(merged.rotate_with_camera, Some(false));
+    }
+
+    /// Facing and `rotateWithCamera` resolve from `placement` on the JS side,
+    /// so "unset" must reach it rather than a default baked in here.
+    #[test]
+    fn unset_orientation_stays_unset_through_conversion() {
+        let material = navara_material::TextMaterial::from(TextMaterial::from(
+            &navara_material::TextMaterial::default(),
+        ));
+        assert_eq!(material.text_facing, None);
+        assert_eq!(material.rotate_with_camera, None);
+
+        let js = TextMaterial::from(&material);
+        assert_eq!(js.text_facing, None);
+        assert_eq!(js.rotate_with_camera, None);
     }
 }

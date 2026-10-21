@@ -16,6 +16,7 @@ import type { NormalBufferAttributes } from "three";
 import type { BatchedAttributeName } from "../batchTexture";
 import { Color } from "../Color";
 import type { FeatureHandler } from "../event/context";
+import type { LineCap } from "../lineDash";
 import {
   InstancedMesh,
   isFeatureMesh,
@@ -25,6 +26,7 @@ import {
   type ModelBatchedAttributeName,
   InstancedSpriteMesh,
   BatchedSdfTextMesh,
+  PolylineMesh,
   type GeometryType,
   VALID_GEOMETRY_TYPES,
 } from "../mesh";
@@ -53,6 +55,12 @@ export type EvaluatableMaterialProperty = {
   text: AvailableMaterialProperty["text"];
   /** Line width expression from layer configuration (for polylines). */
   width: AvailableMaterialProperty["width"];
+  /** Dash pattern of this line: alternating dash and gap lengths in line
+   *  widths. An empty array draws it solid. Overrides the material's
+   *  `dashArray`. */
+  dashArray: number[];
+  /** Shape of the ends of this line's dashes. Overrides the material's `cap`. */
+  cap: LineCap;
   /** Point/text size expression from layer configuration (for points/text). */
   size: AvailableMaterialProperty["size"];
   /** Extra space between characters in ems (for text). Overrides the
@@ -65,18 +73,19 @@ export type EvaluatableMaterialProperty = {
   declutterPriority: AvailableMaterialProperty["declutterPriority"];
   /** Image URL for billboards; packed into a shared per-mesh texture atlas. */
   image: string;
-  /** Whether this label/sprite stands up (`"upright"`) or lies on the globe
-   *  surface (`"flat"`). Overrides the material's
+  /** Whether this label/sprite lies in the screen plane (`"upright"`) or on
+   *  the globe surface (`"flat"`). Overrides the material's
    *  `textFacing`/`billboardFacing`/`pointFacing` for this feature. */
   facing: "upright" | "flat";
-  /** Whether this label/sprite turns to follow the camera. Overrides the
-   *  material's `rotateWithCamera` for this feature. */
+  /** Whether this label/sprite turns with the camera rather than with the
+   *  map. Overrides the material's `rotateWithCamera` for this feature. */
   rotateWithCamera: boolean;
   /** Whether this label places each glyph on its own along its line (for
    *  text). Overrides the material's `spreadGlyphs` for this feature. */
   spreadGlyphs: boolean;
   /** In-plane rotation of this label/sprite about its anchor, in degrees,
-   *  clockwise seen from the front. Overrides the material's `rotation`. */
+   *  clockwise seen from the front; along a line, of each glyph about its own
+   *  centre. Overrides the material's `rotation`. */
   rotation: number;
   /** Emissive color expression (for polygons/3D Tiles models/points/billboards/text). */
   emissive: AvailableMaterialProperty["emissiveColor"];
@@ -93,6 +102,8 @@ type EvaluatedMaterialProperty = {
   height: number;
   text: string;
   width: number;
+  dashArray: number[];
+  cap: LineCap;
   size: number;
   letterSpacing: number;
   opacity: number;
@@ -713,6 +724,16 @@ export class FeatureEvaluator {
     }
     if (evaluated.width != null) {
       updateBatchAttribute("lineWidth", evaluated.width);
+    }
+    if (
+      mesh instanceof PolylineMesh &&
+      (evaluated.dashArray != null || evaluated.cap != null)
+    ) {
+      mesh._setFeatureLineDash(
+        batchIndex,
+        evaluated.dashArray ?? undefined,
+        evaluated.cap ?? undefined,
+      );
     }
     if (evaluated.opacity != null) {
       updateBatchAttribute("opacity", evaluated.opacity);

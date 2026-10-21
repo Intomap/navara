@@ -423,6 +423,49 @@ describe("toEvaluatedValue", () => {
       expect(result.image).toBeUndefined();
     });
 
+    it("should map icon-rotate and symbol-sort-key for billboards", () => {
+      const layer: StyleLayer = { id: "test", type: "symbol", source: "test" };
+
+      const result = toEvaluatedValue(
+        layer,
+        {},
+        { "icon-image": "marker", "icon-rotate": 45, "symbol-sort-key": 3 },
+        "billboard",
+      );
+
+      expect(result.rotation).toBe(45);
+      // Lower sort keys are placed first, so they get higher priority.
+      expect(result.declutterPriority).toBe(-3);
+    });
+
+    it("should map text-rotate, text-transform and symbol-sort-key for text", () => {
+      const layer: StyleLayer = { id: "test", type: "symbol", source: "test" };
+
+      const upper = toEvaluatedValue(
+        layer,
+        {},
+        {
+          "text-field": "Main Street",
+          "text-rotate": -30,
+          "text-transform": "uppercase",
+          "symbol-sort-key": -2,
+        },
+        "text",
+      );
+      expect(upper.text).toBe("MAIN STREET");
+      expect(upper.rotation).toBe(-30);
+      expect(upper.declutterPriority).toBe(2);
+
+      const lower = toEvaluatedValue(
+        layer,
+        {},
+        { "text-field": "Main Street", "text-transform": "lowercase" },
+        "text",
+      );
+      expect(lower.text).toBe("main street");
+      expect(lower).not.toHaveProperty("declutterPriority");
+    });
+
     it("should warn and skip when geometryType is invalid (not billboard or text)", () => {
       const consoleWarnSpy = vi
         .spyOn(console, "warn")
@@ -649,5 +692,40 @@ describe("text-letter-spacing", () => {
       "billboard",
     );
     expect(result.letterSpacing).toBeUndefined();
+  });
+});
+
+describe("text-rotate and icon-rotate", () => {
+  const engine = new JsStyleEngine();
+  const symbol = (layout: StyleLayer["layout"]): StyleLayer =>
+    ({ id: "test", type: "symbol", source: "test", layout }) as StyleLayer;
+
+  it("defaults to the spec value 0 when omitted", () => {
+    const evaluators = createLayoutEvaluators(symbol({}), engine, "Point");
+    for (const key of ["text-rotate", "icon-rotate"]) {
+      expect(evaluators[key]({ properties: {}, zoom: 10 })).toBe(0);
+    }
+  });
+
+  it("evaluates data-driven rotation", () => {
+    const byData = createLayoutEvaluators(
+      symbol({ "text-rotate": ["get", "heading"] }),
+      engine,
+      "Point",
+    )["text-rotate"];
+    expect(byData({ properties: { heading: 30 }, zoom: 10 })).toBe(30);
+  });
+
+  it("maps each to its own mesh's rotation", () => {
+    const layout = {
+      "text-field": "Label",
+      "icon-image": "/icons/marker.svg",
+      "text-rotate": 15,
+      "icon-rotate": 40,
+    };
+    expect(toEvaluatedValue(symbol({}), {}, layout, "text").rotation).toBe(15);
+    expect(toEvaluatedValue(symbol({}), {}, layout, "billboard").rotation).toBe(
+      40,
+    );
   });
 });

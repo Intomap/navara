@@ -155,10 +155,10 @@
           "status": "✅"
         },
         "text-halo-color": {
-          "status": "⚠️ Evaluated once at layer construction"
+          "status": "⚠️ Follows zoom, but is the same for every feature in the layer"
         },
         "text-halo-width": {
-          "status": "⚠️ Evaluated once at layer construction"
+          "status": "⚠️ Follows zoom, but is the same for every feature in the layer"
         },
         "text-halo-blur": {
           "status": "❌"
@@ -202,7 +202,7 @@
           "status": "❌"
         },
         "icon-anchor": {
-          "status": "❌"
+          "status": "⚠️ Follows zoom, but is the same for every feature in the layer"
         },
         "text-offset": {
           "status": "❌"
@@ -211,12 +211,66 @@
           "status": "❌"
         },
         "text-rotate": {
-          "status": "❌"
+          "status": "✅"
         },
         "icon-rotate": {
-          "status": "❌"
+          "status": "✅"
         },
         "symbol-sort-key": {
+          "status": "⚠️ Sets placement priority only, not draw order"
+        },
+        "symbol-placement": {
+          "status": "⚠️ Line placement labels line geometry only, not polygon outlines"
+        },
+        "symbol-spacing": {
+          "status": "⚠️ Evaluated once at layer construction"
+        },
+        "text-transform": {
+          "status": "✅"
+        },
+        "text-max-width": {
+          "status": "⚠️ Follows zoom, but is the same for every feature in the layer"
+        },
+        "text-justify": {
+          "status": "⚠️ Follows zoom, but is the same for every feature in the layer; auto is centered"
+        },
+        "text-max-angle": {
+          "status": "✅"
+        },
+        "text-keep-upright": {
+          "status": "✅"
+        },
+        "text-rotation-alignment": {
+          "status": "✅"
+        },
+        "text-pitch-alignment": {
+          "status": "✅"
+        },
+        "icon-rotation-alignment": {
+          "status": "⚠️ Evaluated once at layer construction on line placement"
+        },
+        "icon-pitch-alignment": {
+          "status": "⚠️ On-screen icons turn by ground bearing on lines"
+        },
+        "text-allow-overlap": {
+          "status": "⚠️ Also lets other symbols overlap the text"
+        },
+        "icon-allow-overlap": {
+          "status": "⚠️ Also lets other symbols overlap the icon"
+        },
+        "text-overlap": {
+          "status": "⚠️ cooperative is treated as never"
+        },
+        "icon-overlap": {
+          "status": "⚠️ cooperative is treated as never"
+        },
+        "text-ignore-placement": {
+          "status": "❌"
+        },
+        "icon-ignore-placement": {
+          "status": "❌"
+        },
+        "text-line-height": {
           "status": "❌"
         }
       }
@@ -240,7 +294,7 @@
           "status": "❌"
         },
         "raster-fade-duration": {
-          "status": "❌"
+          "status": "⚠️ Ignored; tiles appear without fading"
         },
         "raster-hue-rotate": {
           "status": "❌"
@@ -304,7 +358,15 @@
       "status": "✅"
     },
     "vector": {
-      "status": "✅"
+      "status": "⚠️ MapLibre Tiles (mlt encoding) are not supported",
+      "encoding": {
+        "mvt": {
+          "status": "✅"
+        },
+        "mlt": {
+          "status": "❌"
+        }
+      }
     },
     "raster": {
       "status": "✅"
@@ -643,25 +705,25 @@
       "status": "❌"
     },
     "sky": {
-      "status": "❌"
+      "status": "⚠️ Only atmosphere-blend, which is ignored"
     },
     "projection": {
-      "status": "❌"
+      "status": "⚠️ Ignored; always renders a globe"
     },
     "terrain": {
       "status": "✅"
     },
     "sprite": {
-      "status": "✅"
+      "status": "❌"
     },
     "glyphs": {
-      "status": "✅"
+      "status": "❌"
     },
     "font-faces": {
       "status": "✅"
     },
     "transition": {
-      "status": "❌"
+      "status": "⚠️ Ignored; style changes apply immediately"
     }
   },
   "light": {
@@ -698,7 +760,7 @@
       "status": "❌"
     },
     "atmosphere-blend": {
-      "status": "❌"
+      "status": "⚠️ Ignored; MapLibre's globe atmosphere is not drawn"
     }
   },
   "terrain": {
@@ -711,15 +773,15 @@
   },
   "projection": {
     "type": {
-      "status": "❌"
+      "status": "⚠️ Ignored; always renders a globe"
     }
   },
   "transition": {
     "duration": {
-      "status": "❌"
+      "status": "⚠️ Ignored; style changes apply immediately"
     },
     "delay": {
-      "status": "❌"
+      "status": "⚠️ Ignored; style changes apply immediately"
     }
   },
   "sprite": {
