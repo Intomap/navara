@@ -26,6 +26,7 @@ import {
   toEvaluatedValue,
 } from "./adapters/toEvaluatedValue";
 import {
+  colorReliefLayerFollowsZoom,
   getSymbolPlacement,
   symbolLayerFollowsZoom,
   toLayerDescription,
@@ -51,15 +52,28 @@ type MapLibreStylePluginOptions = {
 };
 
 /**
- * A symbol layer's materials, comparable across zooms (the source is not).
- * `Color` keeps its value in a private field, which JSON cannot see.
+ * The zoom-following part of a layer's materials, comparable across zooms
+ * (the source is not): a symbol layer's text/billboard, or a color-relief
+ * layer's opacity and resampling. `Color` keeps its value in a private field,
+ * which JSON cannot see.
  */
 function serializeMaterials(layerDesc: LayerDescription): string {
-  return "text" in layerDesc || "billboard" in layerDesc
-    ? JSON.stringify([layerDesc.text, layerDesc.billboard], (_key, value) =>
-        value instanceof Color ? value.toHex() : value,
-      )
-    : "";
+  if ("text" in layerDesc || "billboard" in layerDesc) {
+    return JSON.stringify(
+      [layerDesc.text, layerDesc.billboard],
+      (_key, value) => (value instanceof Color ? value.toHex() : value),
+    );
+  }
+  if (layerDesc.type === "raster" && layerDesc.elevationHeatmap) {
+    // Only opacity and resampling can follow zoom: the style spec allows only
+    // ["elevation"] in color-relief-color, so colorMap/colorStops never change
+    // with zoom (and are large arrays not worth serializing).
+    return JSON.stringify([
+      layerDesc.raster?.opacity,
+      layerDesc.elevationHeatmap.filter,
+    ]);
+  }
+  return "";
 }
 
 /** A layer's `minzoom` is inclusive and its `maxzoom` exclusive. */
@@ -140,11 +154,12 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
    */
   private zoomRangeLayers = new Map<Layer, StyleLayer>();
   /**
-   * Symbol layers with a layer-level property (alignment, halo, ...) that
-   * follows zoom, with what is needed to rebuild their description and the
-   * last one applied, serialized without its source.
+   * Layers with a layer-level property that follows zoom (a symbol layer's
+   * alignment, halo, ...; a color-relief layer's opacity or resampling), with
+   * what is needed to rebuild their description and the last one applied,
+   * serialized without its source.
    */
-  private zoomFollowingSymbolLayers = new Map<
+  private zoomFollowingLayers = new Map<
     Layer,
     {
       styleLayer: StyleLayer;
@@ -586,7 +601,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
         if (this.backgroundHandler?.needsZoomUpdate()) {
           this.backgroundHandler.apply(view, currentZoom);
         }
-        this.refreshZoomFollowingSymbolLayers(currentZoom);
+        this.refreshZoomFollowingLayers(currentZoom);
         // On initial zoom, also update zoom-dependent features. Range-only
         // layers too: features evaluated before the camera was ready used
         // zoom 0.
@@ -618,7 +633,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
         if (this.backgroundHandler?.needsZoomUpdate()) {
           this.backgroundHandler.apply(view, currentZoom);
         }
-        this.refreshZoomFollowingSymbolLayers(currentZoom);
+        this.refreshZoomFollowingLayers(currentZoom);
 
         // Trigger re-evaluation only on layers with zoom-dependent expressions
         for (const layer of this.zoomDependentLayers) {
@@ -637,12 +652,13 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
   }
 
   /**
-   * Re-evaluate the layer-level symbol properties that follow zoom and apply
-   * them with `layer.update()`, only for layers whose materials changed (a
-   * `step` crossing), since each update re-lays out the layer's labels.
+   * Re-evaluate the layer-level properties that follow zoom and apply them
+   * with `layer.update()`, only for layers whose materials changed (e.g. a
+   * `step` crossing), since each symbol update re-lays out the layer's labels
+   * and each color-relief update re-composites its tiles.
    */
-  private refreshZoomFollowingSymbolLayers(zoom: number): void {
-    for (const [layer, entry] of this.zoomFollowingSymbolLayers) {
+  private refreshZoomFollowingLayers(zoom: number): void {
+    for (const [layer, entry] of this.zoomFollowingLayers) {
       const layerDesc = toLayerDescription(
         entry.source,
         entry.styleLayer,
@@ -746,6 +762,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
     "symbol",
     "raster",
     "hillshade",
+    "color-relief",
     "background",
   ]);
 
@@ -755,6 +772,12 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
   private addStyleLayer(view: ThreeView, styleLayer: StyleLayer): void {
     if (!this.parsedStyle) {
       throw new Error("Style not parsed yet");
+    }
+
+    // Check visibility (layout property supported by all layer types)
+    // Skip layers with visibility: "none"
+    if (styleLayer.layout?.visibility === "none") {
+      return;
     }
 
     // Check if layer has a source
@@ -813,8 +836,11 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
     const layer = view.addLayer(layerDesc);
     this.layers.push(layer);
 
-    if (symbolLayerFollowsZoom(styleLayer)) {
-      this.zoomFollowingSymbolLayers.set(layer, {
+    if (
+      symbolLayerFollowsZoom(styleLayer) ||
+      colorReliefLayerFollowsZoom(styleLayer)
+    ) {
+      this.zoomFollowingLayers.set(layer, {
         styleLayer,
         source,
         fontFamily,
@@ -1126,7 +1152,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
     this.warnedSources.clear();
     this.zoomDependentLayers.clear();
     this.zoomRangeLayers.clear();
-    this.zoomFollowingSymbolLayers.clear();
+    this.zoomFollowingLayers.clear();
     this.backgroundHandler?.clearCache();
     this.backgroundHandler = undefined;
     this.parsedStyle = null;
