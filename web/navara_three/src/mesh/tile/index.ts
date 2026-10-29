@@ -182,12 +182,6 @@ export class TileMesh
     this.atlasBytes = compositeAtlasBytes(this.compositor.size);
     this.reportedDrapeGpuBytes = this.atlasBytes;
 
-    // Acquire the per-tile composite atlas from the compositor. Pairing the
-    // acquire with the mesh keeps the atlas lifecycle tied to the tile and lets
-    // the compositor allocate its private OrthographicCamera for this handle.
-    // The atlas Textures are bound to the main shader later in initMaterial.
-    this.compositor.acquire(handle);
-
     this.maxTextures = textureOptions.maxTextures;
 
     // Calculate numAdditionalTextures based on which additional textures are in use
@@ -245,6 +239,13 @@ export class TileMesh
         })
       : new DirectRasterDrapeResolver();
 
+    // Acquire the per-tile composite atlas from the compositor, after every
+    // constructor step that can throw: an exception above must not leak a
+    // refcount. Pairing the acquire with the mesh keeps the atlas lifecycle
+    // tied to the tile and lets the compositor allocate its private
+    // OrthographicCamera for this handle. The atlas Textures are bound to the
+    // main shader later in initMaterial.
+    this.compositor.acquire(handle);
     tileMapByHandle.set(handle, this);
 
     this.onBeforeRender = this._onBeforeRender;
@@ -461,38 +462,57 @@ export class TileMesh
     } = this.ctx;
 
     const installed = this.installGeometry(mesh);
-    if (!installed) return;
+    if (!installed) {
+      // A mesh that never reaches the scene has no removedFromWorld disposal
+      // path; release its compositor atlas here instead of leaking a refcount.
+      this.dispose(
+        this.ctx.tileMapByHandle,
+        textureFragmentIndex,
+        tileMeshToFragmentIds,
+      );
+      return;
+    }
     const { geometry, terrainGeometry, boundingBox } = installed;
 
-    if (mat.showBoundingBox) {
-      this.boundingBoxHelper = new Box3Helper(boundingBox, 0x00ff00);
-      this.add(this.boundingBoxHelper);
+    try {
+      if (mat.showBoundingBox) {
+        this.boundingBoxHelper = new Box3Helper(boundingBox, 0x00ff00);
+        this.add(this.boundingBoxHelper);
+      }
+
+      this.material = this.initMaterial(mat, uniforms, globe);
+
+      const maxTextures = this.maxTextures;
+      this.setUniforms(mat, maxTextures);
+      this.setupTextureFragments(
+        mat.texture_fragments(),
+        textureFragmentIndex,
+        tileMeshToFragmentIds,
+      );
+      this.setupTextures(loadedTexs, textureOptions, maxTextures, mat);
+
+      this.attachShadowMesh(
+        geometry,
+        terrainGeometry,
+        !!mat.castShadow,
+        !!mat.receiveShadow,
+      );
+      applyLitOption(this.material, mat.lit);
+
+      this.visible = false;
+      this.renderOrder = mesh.render_order;
+      if (transform) setTransform(this, transform);
+      scenes.globe.add(this);
+      meshes.set(id, this);
+    } catch (error) {
+      // Half-initialised meshes are unreachable by the normal removal path.
+      this.dispose(
+        this.ctx.tileMapByHandle,
+        textureFragmentIndex,
+        tileMeshToFragmentIds,
+      );
+      throw error;
     }
-
-    this.material = this.initMaterial(mat, uniforms, globe);
-
-    const maxTextures = this.maxTextures;
-    this.setUniforms(mat, maxTextures);
-    this.setupTextureFragments(
-      mat.texture_fragments(),
-      textureFragmentIndex,
-      tileMeshToFragmentIds,
-    );
-    this.setupTextures(loadedTexs, textureOptions, maxTextures, mat);
-
-    this.attachShadowMesh(
-      geometry,
-      terrainGeometry,
-      !!mat.castShadow,
-      !!mat.receiveShadow,
-    );
-    applyLitOption(this.material, mat.lit);
-
-    this.visible = false;
-    this.renderOrder = mesh.render_order;
-    if (transform) setTransform(this, transform);
-    scenes.globe.add(this);
-    meshes.set(id, this);
   }
 
   // Watermask: 1 byte = uniform, 65536 bytes = 256x256 grid. Stored for
@@ -1642,6 +1662,11 @@ ${generateTileCommonInjection(maxTextures)}
 
   private _disposed = false;
 
+  /** Lets shutdown dispose only meshes that are still alive. */
+  get disposed(): boolean {
+    return this._disposed;
+  }
+
   dispose(
     tileMapByHandle?: TileMapByHandle,
     textureFragmentIndex?: Map<string, Set<TextureSlot>>,
@@ -1667,7 +1692,11 @@ ${generateTileCommonInjection(maxTextures)}
       );
     }
 
-    this.ctx.viewContext?.removeShadowMaterial(this.material);
+    // Half-initialised meshes (geometry or material setup failed) have no
+    // material yet; every other step below is safe on them.
+    if (this.material) {
+      this.ctx.viewContext?.removeShadowMaterial(this.material);
+    }
 
     // Note: geometry disposal (including shadowMesh.geometry) is handled by
     // disposeObject3D() in event/index.ts before removedFromWorld is dispatched.

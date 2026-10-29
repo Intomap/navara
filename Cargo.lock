@@ -2094,6 +2094,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "navara_city"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "earcutr",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "navara_component"
 version = "0.1.0"
 dependencies = [
@@ -2836,6 +2846,7 @@ version = "0.1.0"
 dependencies = [
  "gloo-utils",
  "js-sys",
+ "navara_city",
  "navara_core",
  "navara_feature_component",
  "navara_geometry",

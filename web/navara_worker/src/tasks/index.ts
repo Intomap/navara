@@ -1,6 +1,11 @@
+import { constructCityTile } from "./constructCityTile";
 import { constructPolygonBatchedFeature } from "./constructPolygonBatchedFeature";
 import { constructPolylineBatchedFeature } from "./constructPolylineBatchedFeature";
 import { constructQuantizedMeshTerrainMesh } from "./constructQuantizedMeshTerrainMesh";
+import {
+  constructFlyoversMesh,
+  constructStructuresMesh,
+} from "./constructStructures";
 import { constructTerrainMesh } from "./constructTerrainMesh";
 import { getImageDataFromBlob } from "./getImageDataFromBlob";
 import { getImageDataFromImageBitmap } from "./getImageDataFromImageBitmap";
@@ -15,6 +20,9 @@ export async function warmUp(): Promise<void> {
 }
 
 export const commonTasks = {
+  constructCityTile,
+  constructStructuresMesh,
+  constructFlyoversMesh,
   constructTerrainMesh,
   constructQuantizedMeshTerrainMesh,
   upsampleTerrainMesh,

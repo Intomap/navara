@@ -1,0 +1,40 @@
+{
+  "name": "@navaramap/three-city",
+  "type": "module",
+  "version": "0.0.0",
+  "main": "dist/index.umd.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "type-check": "tsc && tsc -p tsconfig.node.json",
+    "build": "pnpm type-check && vite build --watch=false",
+    "build:dev": "vite build --mode development",
+    "test": "vitest --passWithNoTests --watch=false",
+    "lint": "eslint . --fix",
+    "lint:check": "eslint .",
+    "format": "prettier --write --ignore-path ../../.gitignore .",
+    "format:check": "prettier --check --ignore-path ../../.gitignore ."
+  },
+  "license": "MIT OR Apache-2.0",
+  "peerDependencies": {
+    "@navaramap/three": "workspace:*",
+    "@navaramap/worker": "workspace:*",
+    "postprocessing": ">=6.38.0",
+    "three": ">=0.183.0"
+  },
+  "devDependencies": {
+    "@navaramap/core": "workspace:*",
+    "@navaramap/three": "workspace:*",
+    "@navaramap/worker": "workspace:*",
+    "@types/three": "0.185.4",
+    "postprocessing": "6.39.4",
+    "three": "0.185.1"
+  },
+  "dependencies": {
+    "@dgreenheck/ez-tree": "1.0.0"
+  }
+}

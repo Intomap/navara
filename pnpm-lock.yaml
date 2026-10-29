@@ -507,6 +507,31 @@ importers:
         specifier: 0.185.1
         version: 0.185.1
 
+  web/navara_three_city:
+    dependencies:
+      '@dgreenheck/ez-tree':
+        specifier: 1.0.0
+        version: 1.0.0(three@0.185.1)
+    devDependencies:
+      '@navaramap/core':
+        specifier: workspace:*
+        version: link:../navara_core
+      '@navaramap/three':
+        specifier: workspace:*
+        version: link:../navara_three
+      '@navaramap/worker':
+        specifier: workspace:*
+        version: link:../navara_worker
+      '@types/three':
+        specifier: 0.185.4
+        version: 0.185.4
+      postprocessing:
+        specifier: 6.39.4
+        version: 6.39.4(three@0.185.1)
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+
   web/navara_three_csm:
     devDependencies:
       '@types/three':
@@ -635,6 +660,9 @@ importers:
       '@navaramap/three':
         specifier: workspace:*
         version: link:../navara_three
+      '@navaramap/three-city':
+        specifier: workspace:*
+        version: link:../navara_three_city
       '@navaramap/three-default-descs':
         specifier: workspace:*
         version: link:../navara_three_default_descs
@@ -656,6 +684,9 @@ importers:
       three-stdlib:
         specifier: 2.36.1
         version: 2.36.1(three@0.185.1)
+      tweakpane:
+        specifier: 4.0.5
+        version: 4.0.5
       vue:
         specifier: ^3.5.18
         version: 3.5.43(typescript@6.0.3)
@@ -1186,6 +1217,11 @@ packages:
   '@ctrl/tinycolor@4.2.0':
     resolution: {integrity: sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A==}
     engines: {node: '>=14'}
+
+  '@dgreenheck/ez-tree@1.0.0':
+    resolution: {integrity: sha512-5ZOsqiXUdEbPgAxPp8sjWYqtVSGaK9nuN8/H1A/ert3yA5HzPWOFtXT1+VqdJB42bCX0zYbi+N1F4ibg+GXGtg==}
+    peerDependencies:
+      three: '>=0.167'
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
@@ -5570,6 +5606,7 @@ packages:
 
   lucide-vue-next@0.544.0:
     resolution: {integrity: sha512-mDp/AdGOPIDkpFHnFiTWgQgCST9aBXHVaiobZfOMIvv7nrOukzF/TP+7KoOwrngdWRaH9TMiepMBIX1vsgKJ3g==}
+    deprecated: Package deprecated. Please use @lucide/vue instead.
     peerDependencies:
       vue: '>=3.0.1'
 
@@ -8254,6 +8291,11 @@ snapshots:
   '@csstools/css-tokenizer@4.0.0': {}
 
   '@ctrl/tinycolor@4.2.0': {}
+
+  '@dgreenheck/ez-tree@1.0.0(three@0.185.1)':
+    dependencies:
+      three: 0.185.1
+      tweakpane: 4.0.5
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 

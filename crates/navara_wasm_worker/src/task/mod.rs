@@ -1,3 +1,4 @@
+pub mod city_tile;
 pub mod construct_polygon_batched_feature;
 pub mod construct_polyline_batched_feature;
 pub mod construct_quantized_mesh_terrain_mesh;

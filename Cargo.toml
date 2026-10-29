@@ -104,6 +104,7 @@ navara_buffer_store = { path = "crates/navara_buffer_store" }
 navara_camera = { path = "crates/navara_camera" }
 navara_cesium3dtiles = { path = "crates/navara_cesium3dtiles" }
 navara_cesiumtiles = { path = "crates/navara_cesiumtiles" }
+navara_city = { path = "crates/navara_city" }
 navara_component = { path = "crates/navara_component" }
 navara_core = { path = "crates/navara_core" }
 navara_data_requester = { path = "crates/navara_data_requester" }

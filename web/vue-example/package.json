@@ -14,6 +14,7 @@
   "dependencies": {
     "@navaramap/maplibre-style": "workspace:*",
     "@navaramap/three": "workspace:*",
+    "@navaramap/three-city": "workspace:*",
     "@navaramap/three-default-descs": "workspace:*",
     "@navaramap/three-default-plugin": "workspace:*",
     "@navaramap/three-plugins": "workspace:*",
@@ -21,6 +22,7 @@
     "postprocessing": "6.39.4",
     "three": "0.185.1",
     "three-stdlib": "2.36.1",
+    "tweakpane": "4.0.5",
     "vue": "^3.5.18"
   },
   "devDependencies": {

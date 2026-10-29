@@ -418,3 +418,62 @@ describe("TileMesh handle registration", () => {
     expect(ctx.tileMapByHandle.has(1n)).toBe(false);
   });
 });
+
+describe("TileMesh atlas refcount pairing", () => {
+  function failingInitCtx() {
+    const { tile, ctx } = makeTile();
+    const mutable = ctx as unknown as {
+      buf: {
+        f32: () => undefined;
+        u32: () => undefined;
+        u8: () => undefined;
+      };
+    };
+    mutable.buf = {
+      f32: () => undefined,
+      u32: () => undefined,
+      u8: () => undefined,
+    };
+    const compositor = ctx.tileTextureCompositor as unknown as {
+      acquire: ReturnType<typeof vi.fn>;
+      release: ReturnType<typeof vi.fn>;
+    };
+    return { tile, ctx, compositor };
+  }
+
+  it("releases the atlas once when geometry buffers are missing", async () => {
+    const { tile, compositor } = failingInitCtx();
+    const eventMesh = {
+      aabb: {
+        center: { x: 0, y: 0, z: 0 },
+        extent: { x: 1, y: 1, z: 1 },
+      },
+      render_order: 0,
+    };
+    await (
+      tile as unknown as {
+        createMesh(
+          id: string,
+          mesh: unknown,
+          mat: unknown,
+          transform: unknown,
+          globe: unknown,
+        ): Promise<void>;
+      }
+    ).createMesh("t", eventMesh, {}, undefined, {});
+    expect(compositor.acquire).toHaveBeenCalledTimes(1);
+    expect(compositor.release).toHaveBeenCalledTimes(1);
+    expect(compositor.release).toHaveBeenCalledWith(1n);
+    expect(tile.disposed).toBe(true);
+  });
+
+  it("does not release twice when dispose repeats", () => {
+    const { tile, ctx } = makeTile();
+    const compositor = ctx.tileTextureCompositor as unknown as {
+      release: ReturnType<typeof vi.fn>;
+    };
+    tile.dispose(ctx.tileMapByHandle);
+    tile.dispose(ctx.tileMapByHandle);
+    expect(compositor.release).toHaveBeenCalledTimes(1);
+  });
+});

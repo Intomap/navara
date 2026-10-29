@@ -53,6 +53,7 @@ import {
   ClampToEdgeWrapping,
   RepeatWrapping,
   Group,
+  Object3D,
   PCFShadowMap,
 } from "three";
 import invariant from "tiny-invariant";
@@ -1838,6 +1839,28 @@ export default class ThreeView<
     // Drop declutter participants so the manager doesn't retain removed
     // meshes' GPU/font resources past this view's lifetime.
     this._declutter.dispose();
+
+    // Dispose live tile meshes before dropping the caches: their compositor
+    // atlases are refcounted, and clearing the maps alone leaks one acquire
+    // per surviving tile (reported by TileTextureCache.disposeAll).
+    const liveTileMeshes = new Set<TileMesh>();
+    for (const mesh of this._meshes.values()) {
+      if (mesh instanceof Object3D && "handle" in mesh) {
+        liveTileMeshes.add(mesh as TileMesh);
+      }
+    }
+    for (const mesh of this._tileMapByHandle.values()) {
+      liveTileMeshes.add(mesh);
+    }
+    for (const mesh of liveTileMeshes) {
+      if (!mesh.disposed) {
+        mesh.dispose(
+          this._tileMapByHandle,
+          this._textureFragmentIndex,
+          this._tileMeshToFragmentIds,
+        );
+      }
+    }
 
     // Clear caches and maps
     this._meshes.clear();

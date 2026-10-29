@@ -77,16 +77,20 @@ function injectNormal(shader: ShaderLibShader): ShaderLibShader {
         #include <normal_pars_vertex>
       `,
     )
-    .replace(
+    .replaceWithCondition(
       /* glsl */ `#include <defaultnormal_vertex>`,
       /* glsl */ `
         #include <defaultnormal_vertex>
         #include <normal_vertex>
       `,
+      !shader.vertexShader.includes("#include <normal_vertex>"),
     )
-    .replace(
+    .replaceWithCondition(
       /* glsl */ `#if defined ( USE_ENVMAP ) || defined ( USE_SKINNING )`,
       /* glsl */ `#if 1`,
+      shader.vertexShader.includes(
+        "#if defined ( USE_ENVMAP ) || defined ( USE_SKINNING )",
+      ),
     )
     .replace(
       /* glsl */ `#include <clipping_planes_vertex>`,

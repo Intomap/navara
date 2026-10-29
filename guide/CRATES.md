@@ -9,6 +9,11 @@ This document provides detailed documentation for all 40+ Rust crates in the Nav
 - **Key Features**: Coordinate systems, ellipsoid math, bounding box operations
 - **Used by**: All other crates as foundation
 
+### **`navara_city`**
+- **Purpose**: Pure runtime computation for streamed Tokyo-compatible city artifacts
+- **Key Features**: TKY1 decoding, terrain-conforming meshing, EPSG:2326 projection, ECEF RTC buffers
+- **Used by**: `navara_wasm_worker`; see [CITY_RUNTIME.md](CITY_RUNTIME.md)
+
 ### **`navara_ecs`** 
 - **Purpose**: Bevy ECS wrapper and application orchestration (central coordinator)
 - **Key Features**: Main engine loop, system coordination, component management

@@ -4,8 +4,11 @@ import {
   Color,
   DepthStencilFormat,
   DepthTexture,
+  DirectionalLight,
+  PointLight,
   RGBADepthPacking,
   Scene,
+  SpotLight,
   UnsignedInt248Type,
   WebGLRenderTarget,
   type Material,
@@ -69,10 +72,6 @@ export class CustomRenderPass extends RenderPass {
 
   // Used to render only the shadow map
   private shadowScene = new Scene();
-  private dummyShadowRenderTarget = new WebGLRenderTarget(1, 1, {
-    depthBuffer: true,
-    stencilBuffer: false,
-  });
 
   private debugNormalCopyPass?: NormalCopyPass;
   private readonly gbufferScenes: readonly Scene[];
@@ -399,12 +398,25 @@ export class CustomRenderPass extends RenderPass {
 
     // Render shadow map
     if (renderer.shadowMap.enabled && !this.disableShadow) {
-      renderer.setRenderTarget(this.dummyShadowRenderTarget);
       this.shadowScene.add(this._scenes.globe);
       this.shadowScene.add(this._scenes.mrt);
       this.shadowScene.add(this._scenes.opaque);
+      this.shadowScene.add(this._scenes.light);
+      this.shadowScene.updateMatrixWorld(true);
+      this._camera.updateMatrixWorld();
+      this._scenes.light.updateMatrixWorld(true);
+      renderer.compile(this.shadowScene, this._camera);
       renderer.shadowMap.needsUpdate = true;
-      this._renderWithLight(renderer, this.shadowScene);
+      const lights: (DirectionalLight | PointLight | SpotLight)[] = [];
+      this._scenes.light.traverse((child) => {
+        if (
+          child instanceof DirectionalLight ||
+          child instanceof PointLight ||
+          child instanceof SpotLight
+        )
+          lights.push(child);
+      });
+      renderer.shadowMap.render(lights, this.shadowScene, this._camera);
       this.shadowScene.clear();
     }
 
