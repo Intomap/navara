@@ -165,6 +165,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
       styleLayer: StyleLayer;
       source: Source;
       fontFamily: string | undefined;
+      rank: number;
       appliedMaterials: string;
     }
   >();
@@ -427,9 +428,9 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
     }
 
     // Step 5: Add layers that reference the sources
-    for (const styleLayer of this.parsedStyle.layers) {
+    for (const [rank, styleLayer] of this.parsedStyle.layers.entries()) {
       try {
-        this.addStyleLayer(view, styleLayer);
+        this.addStyleLayer(view, styleLayer, rank);
       } catch (err) {
         console.error(`Failed to add layer "${styleLayer.id}":`, err);
         // Continue loading other layers
@@ -665,6 +666,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
         entry.fontFamily,
         this.engine,
         zoom,
+        entry.rank,
       );
       if (!layerDesc) continue;
       const materials = serializeMaterials(layerDesc);
@@ -767,9 +769,14 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
   ]);
 
   /**
-   * Add a MapLibre Style layer to the Navara view.
+   * Add a MapLibre Style layer to the Navara view. `rank` is its index in the
+   * style: MapLibre places symbols from the top-most layer down.
    */
-  private addStyleLayer(view: ThreeView, styleLayer: StyleLayer): void {
+  private addStyleLayer(
+    view: ThreeView,
+    styleLayer: StyleLayer,
+    rank: number,
+  ): void {
     if (!this.parsedStyle) {
       throw new Error("Style not parsed yet");
     }
@@ -825,6 +832,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
       fontFamily,
       this.engine,
       view.getZoomLevel(MAPLIBRE_TILE_SIZE),
+      rank,
     );
 
     // Skip unsupported layers (toLayerDescription returns null for unsupported types)
@@ -844,6 +852,7 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
         styleLayer,
         source,
         fontFamily,
+        rank,
         appliedMaterials: serializeMaterials(layerDesc),
       });
     }

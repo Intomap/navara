@@ -3,7 +3,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 import { initSync } from "@navaramap/engine";
-import type { Source } from "@navaramap/three";
+import type { Source, VectorLayer } from "@navaramap/three";
 import { beforeAll, describe, it, expect, vi } from "vitest";
 
 import { JsStyleEngine } from "../engine/JsStyleEngine";
@@ -899,15 +899,33 @@ describe("toLayerDescription", () => {
       });
     });
 
-    it("maps overlap properties to declutter", () => {
+    it("maps overlap properties", () => {
+      const defaults = buildSymbol({
+        "text-field": "{name}",
+        "icon-image": "marker",
+      });
+      for (const desc of [defaults.text, defaults.billboard]) {
+        expect(desc).toMatchObject({
+          overlap: "never",
+          ignorePlacement: false,
+        });
+      }
+
       const allow = buildSymbol({
         "text-field": "{name}",
         "icon-image": "marker",
         "text-allow-overlap": true,
         "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
       });
-      expect(allow.text?.declutter).toBe(false);
-      expect(allow.billboard?.declutter).toBe(false);
+      expect(allow.text).toMatchObject({
+        overlap: "always",
+        ignorePlacement: false,
+      });
+      expect(allow.billboard).toMatchObject({
+        overlap: "always",
+        ignorePlacement: true,
+      });
 
       // `*-overlap` takes precedence over `*-allow-overlap`.
       const overlap = buildSymbol({
@@ -915,10 +933,101 @@ describe("toLayerDescription", () => {
         "icon-image": "marker",
         "text-allow-overlap": true,
         "text-overlap": "cooperative",
+        "text-ignore-placement": true,
         "icon-overlap": "always",
       });
-      expect(overlap.text?.declutter).toBe(true);
-      expect(overlap.billboard?.declutter).toBe(false);
+      expect(overlap.text).toMatchObject({
+        overlap: "cooperative",
+        ignorePlacement: true,
+      });
+      expect(overlap.billboard?.overlap).toBe("always");
+    });
+
+    it("pairs text and icon unless the partner is optional or missing", () => {
+      const paired = buildSymbol({
+        "text-field": "{name}",
+        "icon-image": "marker",
+      });
+      expect(paired.text?.standalone).toBe(false);
+      expect(paired.billboard?.standalone).toBe(false);
+
+      // `text-optional` lets the icon show alone, and vice versa.
+      const optional = buildSymbol({
+        "text-field": "{name}",
+        "icon-image": "marker",
+        "text-optional": true,
+      });
+      expect(optional.text?.standalone).toBe(false);
+      expect(optional.billboard?.standalone).toBe(true);
+
+      expect(buildSymbol({ "text-field": "{name}" }).text?.standalone).toBe(
+        true,
+      );
+      expect(
+        buildSymbol({ "icon-image": "marker" }).billboard?.standalone,
+      ).toBe(true);
+    });
+
+    it("maps text and icon padding", () => {
+      const defaults = buildSymbol({
+        "text-field": "{name}",
+        "icon-image": "marker",
+      });
+      expect(defaults.text?.declutterPadding).toEqual([2]);
+      expect(defaults.billboard?.declutterPadding).toEqual([2]);
+
+      const padded = buildSymbol({
+        "text-field": "{name}",
+        "icon-image": "marker",
+        "text-padding": 0,
+        "icon-padding": [1, 4],
+      });
+      expect(padded.text?.declutterPadding).toEqual([0]);
+      expect(padded.billboard?.declutterPadding).toEqual([1, 4]);
+
+      expect(
+        symbolLayerFollowsZoom(
+          symbolLayer({
+            "text-field": "a",
+            "text-padding": ["interpolate", ["linear"], ["zoom"], 0, 0, 10, 8],
+          }),
+        ),
+      ).toBe(true);
+    });
+
+    it("evaluates padding expressions at the whole zoom", () => {
+      const { billboard } = toLayerDescription(
+        mockSource,
+        symbolLayer({
+          "icon-image": "marker",
+          "icon-padding": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            0,
+            ["literal", [0, 10]],
+            10,
+            ["literal", [10, 20]],
+          ],
+        }),
+        "Font",
+        engine,
+        5.9,
+      ) as VectorLayer;
+      expect(billboard?.declutterPadding).toEqual([5, 15, 5, 15]);
+    });
+
+    it("ranks text and icons by the layer's index in the style", () => {
+      const { text, billboard } = toLayerDescription(
+        mockSource,
+        symbolLayer({ "text-field": "{name}", "icon-image": "marker" }),
+        "Font",
+        engine,
+        undefined,
+        7,
+      ) as VectorLayer;
+      expect(text?.declutterRank).toBe(7);
+      expect(billboard?.declutterRank).toBe(7);
     });
 
     it("maps an explicit icon-anchor to the sprite center", () => {

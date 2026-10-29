@@ -85,14 +85,42 @@ function label(
     minY: -10,
     maxY: 10,
     sizeInMeters: false,
+    rank: 0,
     priority: 0,
     isShown: false,
+    overlap: "never",
+    ignorePlacement: false,
+    padding: [2, 2, 2, 2],
+    pairGroup: 0,
+    featureIndex: 0,
+    pairRole: "label",
+    standalone: true,
+    flatFacing: false,
+    rotateWithCamera: true,
+    rotation: 0,
     handle: 0,
     ...partial,
   };
 }
 
 describe("DeclutterManager", () => {
+  it("requests a frame when marked dirty outside a pass", () => {
+    let frames = 0;
+    const manager = new DeclutterManager(new StubKernel(), () => frames++);
+    const p = new FakeParticipant([label({ handle: 0 })]);
+    manager.register(p);
+    manager.markDirty();
+    expect(frames).toBe(1);
+
+    // A participant marking the pass dirty while it runs needs no frame.
+    p.collectDeclutterCandidates = (out) => {
+      manager.markDirty();
+      FakeParticipant.prototype.collectDeclutterCandidates.call(p, out);
+    };
+    expect(manager.update(makeCamera(), 800, 600, 0, 0)).toBe("ran");
+    expect(frames).toBe(1);
+  });
+
   it("packs candidates for the kernel and applies the returned hidden flags", () => {
     const kernel = new StubKernel();
     // Return the second candidate hidden.
@@ -109,8 +137,19 @@ describe("DeclutterManager", () => {
         isShown: true,
         minX: -4,
         sizeInMeters: true,
+        overlap: "cooperative",
+        ignorePlacement: true,
+        rank: 4,
+        padding: [1, 2, 3, 4],
+        pairGroup: 9,
+        featureIndex: 5,
+        pairRole: "billboard",
+        standalone: false,
+        flatFacing: true,
+        rotateWithCamera: false,
+        rotation: 0.5,
       }),
-      label({ handle: 1, priority: 1 }),
+      label({ handle: 1, priority: 1, pairRole: "billboard" }),
     ]);
     manager.register(p);
 
@@ -128,6 +167,22 @@ describe("DeclutterManager", () => {
     expect(candidates[8]).toBe(1); // sizeInMeters -> 1
     expect(candidates[9]).toBe(3); // priority
     expect(candidates[10]).toBe(1); // isShown -> 1
+    expect(candidates[11]).toBe(2); // overlap: cooperative -> 2
+    expect(candidates[12]).toBe(1); // ignorePlacement -> 1
+    expect(candidates[13]).toBe(4); // rank
+    expect(Array.from(candidates.subarray(14, 18))).toEqual([1, 2, 3, 4]); // padding
+    // pairGroup, featureIndex, pairRole (billboard), standalone
+    expect(Array.from(candidates.subarray(18, 22))).toEqual([9, 5, 2, 0]);
+    // flatFacing, rotateWithCamera, rotation
+    expect(Array.from(candidates.subarray(22, 25))).toEqual([1, 0, 0.5]);
+    // An unpaired candidate packs role 0 whatever its pairRole.
+    expect(candidates[CANDIDATE_STRIDE + 20]).toBe(0);
+    expect(
+      Array.from(
+        candidates.subarray(CANDIDATE_STRIDE + 22, CANDIDATE_STRIDE + 25),
+      ),
+    ).toEqual([0, 1, 0]);
+    expect(candidates[CANDIDATE_STRIDE + 11]).toBe(0); // overlap: never -> 0
   });
 
   it("throttles re-runs and reports them so the caller can schedule a frame", () => {

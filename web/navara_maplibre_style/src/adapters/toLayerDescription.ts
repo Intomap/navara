@@ -4,6 +4,7 @@
 
 import {
   type LayerDescription,
+  type Overlap,
   type Source,
   type SourceGeometryType,
   type VectorLayer,
@@ -45,6 +46,12 @@ const ZOOM_FOLLOWING_SYMBOL_PROPERTIES = {
     "icon-allow-overlap",
     "text-overlap",
     "icon-overlap",
+    "text-ignore-placement",
+    "icon-ignore-placement",
+    "text-padding",
+    "icon-padding",
+    "text-optional",
+    "icon-optional",
   ],
   paint: ["text-halo-color", "text-halo-width"],
 } as const;
@@ -160,30 +167,79 @@ function getSymbolGeometryTypes(
 }
 
 /**
- * Navara's `declutter: false` neither hides on collision nor blocks others,
- * so it stands in for `*-allow-overlap` (and `*-overlap: "always"`).
- * `cooperative` is treated like `never`.
+ * Resolve `*-overlap` — falling back to `*-allow-overlap` when it is unset,
+ * as MapLibre does — and `*-ignore-placement`.
  */
-function allowsOverlap(
+function resolveOverlap(
   engine: StyleEngine,
   styleLayer: StyleLayer,
   prefix: "text" | "icon",
   zoom: number,
-): boolean {
-  const overlap = evaluateLayerProperty(
-    engine,
-    styleLayer,
-    "layout",
-    `${prefix}-overlap`,
-    zoom,
-  );
-  if (overlap !== undefined) return overlap === "always";
-  return (
+): { overlap: Overlap; ignorePlacement: boolean } {
+  const evaluate = (key: string) =>
     evaluateLayerProperty(
       engine,
       styleLayer,
       "layout",
-      `${prefix}-allow-overlap`,
+      `${prefix}-${key}`,
+      zoom,
+    );
+  const overlap = evaluate("overlap");
+  return {
+    overlap:
+      typeof overlap === "string"
+        ? (overlap as Overlap)
+        : evaluate("allow-overlap") === true
+          ? "always"
+          : "never",
+    ignorePlacement: evaluate("ignore-placement") === true,
+  };
+}
+
+/**
+ * Resolve `*-padding` as the one to four CSS-ordered values the material's
+ * `declutterPadding` takes. `text-padding` is a single number, `icon-padding`
+ * either form.
+ *
+ * Evaluated at the whole zoom: a changed padding rebuilds the layer through
+ * `layer.update()`, which an interpolation would otherwise trigger on every
+ * zoom step.
+ */
+function resolvePadding(
+  engine: StyleEngine,
+  styleLayer: StyleLayer,
+  prefix: "text" | "icon",
+  zoom: number,
+): number[] {
+  const value = evaluateLayerProperty(
+    engine,
+    styleLayer,
+    "layout",
+    `${prefix}-padding`,
+    Math.floor(zoom),
+  );
+  return typeof value === "number" ? [value] : (value as number[]);
+}
+
+/**
+ * Whether a symbol's icon or text may show while its `partner` is hidden:
+ * MapLibre places the two together unless the partner is `*-optional`, or the
+ * layer does not draw it at all.
+ */
+function placesAlone(
+  engine: StyleEngine,
+  styleLayer: StyleLayer,
+  partner: "text" | "icon",
+  partnerExists: boolean,
+  zoom: number,
+): boolean {
+  return (
+    !partnerExists ||
+    evaluateLayerProperty(
+      engine,
+      styleLayer,
+      "layout",
+      `${partner}-optional`,
       zoom,
     ) === true
   );
@@ -480,6 +536,7 @@ function createSymbolLayer(
   fontFamily?: string,
   engine?: StyleEngine,
   zoom = CONSTRUCTION_ZOOM,
+  rank = 0,
 ): LayerDescription | null {
   const layout = styleLayer.layout;
 
@@ -552,7 +609,17 @@ function createSymbolLayer(
       Object.assign(layerDesc.billboard, {
         placement,
         ...orientation.icon,
-        declutter: !allowsOverlap(engine, styleLayer, "icon", zoom),
+        declutter: true,
+        declutterRank: rank,
+        declutterPadding: resolvePadding(engine, styleLayer, "icon", zoom),
+        standalone: placesAlone(
+          engine,
+          styleLayer,
+          "text",
+          hasTextField && fontFamily !== undefined,
+          zoom,
+        ),
+        ...resolveOverlap(engine, styleLayer, "icon", zoom),
         ...(geometryTypes && { geometryTypes }),
         ...(alongLine && { spacing: orientation.spacing }),
       } satisfies Partial<BillboardDescription>);
@@ -589,7 +656,10 @@ function createSymbolLayer(
       Object.assign(layerDesc.text, {
         placement,
         ...orientation.text,
-        declutter: !allowsOverlap(engine, styleLayer, "text", zoom),
+        declutterRank: rank,
+        declutterPadding: resolvePadding(engine, styleLayer, "text", zoom),
+        standalone: placesAlone(engine, styleLayer, "icon", hasIconImage, zoom),
+        ...resolveOverlap(engine, styleLayer, "text", zoom),
         // MapLibre never wraps or justifies labels placed along a line.
         maxWidth: alongLine
           ? 0
@@ -687,6 +757,8 @@ function createSymbolLayer(
  * @param zoom - Zoom to evaluate the layer-level symbol properties that can
  *   follow it at (see {@link symbolLayerFollowsZoom}); defaults to
  *   {@link CONSTRUCTION_ZOOM}
+ * @param rank - Symbol placement rank: the layer's index in the style, as
+ *   MapLibre places symbols from the top-most layer down
  * @returns Navara layer description, or null if the layer cannot be processed
  *
  * Note: Returns null for unsupported/misconfigured layers instead of throwing,
@@ -701,6 +773,7 @@ export function toLayerDescription(
   fontFamily?: string,
   engine?: StyleEngine,
   zoom?: number,
+  rank?: number,
 ): LayerDescription | null {
   switch (styleLayer.type) {
     case "fill":
@@ -718,7 +791,14 @@ export function toLayerDescription(
     case "color-relief":
       return createColorReliefLayer(source, styleLayer, engine, zoom);
     case "symbol":
-      return createSymbolLayer(source, styleLayer, fontFamily, engine, zoom);
+      return createSymbolLayer(
+        source,
+        styleLayer,
+        fontFamily,
+        engine,
+        zoom,
+        rank,
+      );
     default:
       // Warn but don't throw - allows loading third-party styles with unsupported layers
       // TypeScript exhaustively narrows styleLayer to never, but we handle unknown types at runtime

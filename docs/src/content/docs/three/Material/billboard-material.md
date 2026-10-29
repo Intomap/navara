@@ -122,6 +122,24 @@ import { Color } from "@navaramap/three";
 }
 ```
 
+### declutterPadding
+
+**Type:** `number[] | undefined`
+
+**Description:** Extra space around the sprite's collision box, in screen pixels whatever [`sizeInMeters`](#sizeinmeters) is. One to four values, expanded like CSS padding: `[all]`, `[vertical, horizontal]`, `[top, horizontal, bottom]` or `[top, right, bottom, left]`. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `icon-padding`.
+
+**Default:** `[2]`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    declutterPadding: [4, 8]
+  }
+}
+```
+
 ### declutterPriority
 
 **Type:** `number | undefined`
@@ -137,6 +155,24 @@ import { Color } from "@navaramap/three";
   billboard: {
     declutter: true,
     declutterPriority: 1
+  }
+}
+```
+
+### declutterRank
+
+**Type:** `number | undefined`
+
+**Description:** Coarse placement order for decluttering, compared before [`declutterPriority`](#declutterpriority): every sprite of a material with a higher rank is placed before any label or sprite with a lower one, whatever their priorities. A per-feature `declutterPriority` therefore only reorders labels and sprites of the same rank. Only meaningful when [`declutter`](#declutter) is enabled.
+
+**Default:** `0.0`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    declutterRank: 1
   }
 }
 ```
@@ -251,6 +287,24 @@ import { Color } from "@navaramap/three";
 }
 ```
 
+### ignorePlacement
+
+**Type:** `boolean | undefined`
+
+**Description:** Keeps this sprite's box out of the collision check, so labels and sprites placed after it can overlap it. The sprite itself still hides when it collides with one placed before it, unless [`overlap`](#overlap) allows it. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `icon-ignore-placement`.
+
+**Default:** `false`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    ignorePlacement: true
+  }
+}
+```
+
 ### offsetDepth
 
 **Type:** `boolean | undefined`
@@ -284,6 +338,24 @@ import { Color } from "@navaramap/three";
   billboard: {
     transparent: true,
     opacity: 0.5 // 50% opacity
+  }
+}
+```
+
+### overlap
+
+**Type:** `"never" | "always" | "cooperative" | undefined`
+
+**Description:** Whether the sprite may be drawn over labels and sprites placed before it (higher [`declutterRank`](#declutterrank), then higher [`declutterPriority`](#declutterpriority), places first). `"never"` hides it on any collision. `"always"` never hides it, and its box still keeps later `"never"` ones away unless [`ignorePlacement`](#ignoreplacement) is set. `"cooperative"` hides it only when it collides with a `"never"` one. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `icon-overlap`.
+
+**Default:** `"never"`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    overlap: "always"
   }
 }
 ```
@@ -497,6 +569,24 @@ This option applies when the layer's geometry is built. `layer.update()` does no
     geometryTypes: ["line"],
     placement: "line",
     spacing: 120
+  }
+}
+```
+
+### standalone
+
+**Type:** `boolean | undefined`
+
+**Description:** Whether the billboard may show while the layer's label at the same anchor is hidden. Unless both are `standalone`, a layer's label and billboard of the same feature and anchor are placed as a pair, tested together so they never block each other. With `false`, the billboard is hidden whenever its label loses its spot, so `false` on both means both show or neither does. With `true` on both, they are placed independently and block each other where they overlap. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `text-optional` (inverted: `text-optional: true` means `standalone: true` on the billboard).
+
+**Default:** `true`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    standalone: false
   }
 }
 ```

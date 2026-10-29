@@ -122,6 +122,24 @@ import { Color } from "@navaramap/three";
 }
 ```
 
+### declutterPadding
+
+**Type:** `number[] | undefined`
+
+**Description:** スプライトの衝突判定ボックスの周囲に加える余白で、[`sizeInMeters`](#sizeinmeters) にかかわらず画面上のピクセル単位です。CSS の padding と同じく 1 〜 4 個の値で指定します（`[全辺]`、`[上下, 左右]`、`[上, 左右, 下]`、`[上, 右, 下, 左]`）。[`declutter`](#declutter) が有効な場合にのみ意味を持ちます。MapLibre の `icon-padding` に相当します。
+
+**Default:** `[2]`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    declutterPadding: [4, 8]
+  }
+}
+```
+
 ### declutterPriority
 
 **Type:** `number | undefined`
@@ -137,6 +155,24 @@ import { Color } from "@navaramap/three";
   billboard: {
     declutter: true,
     declutterPriority: 1
+  }
+}
+```
+
+### declutterRank
+
+**Type:** `number | undefined`
+
+**Description:** デクラッターの大まかな配置順で、[`declutterPriority`](#declutterpriority) より先に比較されます。ランクの高いマテリアルのスプライトは、優先度にかかわらず、ランクの低いラベルやスプライトより先に配置されます。そのため、地物ごとの `declutterPriority` は同じランクのラベルやスプライトの順序だけを入れ替えます。[`declutter`](#declutter) が有効な場合にのみ意味を持ちます。
+
+**Default:** `0.0`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    declutterRank: 1
   }
 }
 ```
@@ -251,6 +287,24 @@ import { Color } from "@navaramap/three";
 }
 ```
 
+### ignorePlacement
+
+**Type:** `boolean | undefined`
+
+**Description:** このスプライトのボックスを衝突判定から外し、後から配置されるラベルやスプライトが重なれるようにします。このスプライト自体は、[`overlap`](#overlap) で許可しない限り、先に配置されたものと衝突すると非表示になります。[`declutter`](#declutter) が有効な場合にのみ意味を持ちます。MapLibre の `icon-ignore-placement` に相当します。
+
+**Default:** `false`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    ignorePlacement: true
+  }
+}
+```
+
 ### offsetDepth
 
 **Type:** `boolean | undefined`
@@ -284,6 +338,24 @@ import { Color } from "@navaramap/three";
   billboard: {
     transparent: true,
     opacity: 0.5 // 50%の不透明度
+  }
+}
+```
+
+### overlap
+
+**Type:** `"never" | "always" | "cooperative" | undefined`
+
+**Description:** 先に配置されたラベルやスプライトの上にこのスプライトを重ねて描画できるかを指定します（[`declutterRank`](#declutterrank)、次に [`declutterPriority`](#declutterpriority) が大きいものから配置されます）。`"never"` はいずれかと衝突すると非表示にします。`"always"` は非表示にしません。そのボックスは、[`ignorePlacement`](#ignoreplacement) を設定しない限り、後から配置される `"never"` のものを遠ざけます。`"cooperative"` は `"never"` のものと衝突した場合にのみ非表示にします。[`declutter`](#declutter) が有効な場合にのみ意味を持ちます。MapLibre の `icon-overlap` に相当します。
+
+**Default:** `"never"`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    overlap: "always"
   }
 }
 ```
@@ -497,6 +569,24 @@ MapLibre の `symbol-spacing` と同様に、ラインに沿った長さが `spa
     geometryTypes: ["line"],
     placement: "line",
     spacing: 120
+  }
+}
+```
+
+### standalone
+
+**Type:** `boolean | undefined`
+
+**Description:** 同じアンカーにあるレイヤーのラベルが非表示のときに、このビルボードを表示できるかを指定します。両方が `standalone` でない限り、レイヤーの同じ地物・同じアンカーのラベルとビルボードはペアとして一緒に判定され、互いに重なりの競合をしません。`false` の場合、ラベルが配置できないとビルボードも非表示になるため、両方を `false` にすると両方が表示されるか、どちらも表示されないかのどちらかになります。両方を `true` にすると独立して配置され、重なる場合は互いに競合します。[`declutter`](#declutter) が有効な場合にのみ意味を持ちます。MapLibre の `text-optional` に相当します（`text-optional: true` がビルボードの `standalone: true` に対応します）。
+
+**Default:** `true`
+
+**Example:**
+
+```typescript
+{
+  billboard: {
+    standalone: false
   }
 }
 ```

@@ -34,13 +34,17 @@ import {
 } from "../../batchTexture";
 import {
   DECLUTTER_FADE_MS,
-  type DeclutterCandidate,
-  type DeclutterParticipant,
+  resolveDeclutterSettings,
+} from "../../declutter/participant";
+import type {
+  DeclutterCandidate,
+  DeclutterParticipant,
 } from "../../declutter/types";
 import type { EventContext } from "../../event/context";
 import { createInstancedSpriteMaterialEnhancer } from "../../material/enhancer";
 import { resolveOrientation } from "../../material/orientation";
 import type { CustomObject3DEventMap } from "../../object3DEvent";
+import type { Overlap } from "../../type";
 import { buildBatchIndexMap } from "../batchIndexMap";
 import { GEOMETRY_TYPES, type GeometryType } from "../constants";
 import { PickableMesh } from "../pickableMesh";
@@ -57,6 +61,9 @@ export type InstancedSpriteOptions = {
   renderOrder?: number;
   ctx: EventContext;
   geometryType: SpriteGeometryType;
+  /** Declutter pair group shared with the layer's labels in this tile; set
+   *  for billboards only (see `declutterPairGroup`). */
+  pairGroup?: number;
 };
 
 type PositionsInfo = {
@@ -222,8 +229,14 @@ export class InstancedSpriteMesh
   private _anchors: Float64Array | null = null;
   /** Whether this mesh's instances participate in screen-space decluttering. */
   private _declutter = false;
-  /** Layer-level placement priority from the material. */
+  /** Layer-level placement rank and priority from the material. */
+  private _declutterRank = 0;
   private _declutterPriority = 0;
+  private _overlap: Overlap = "never";
+  private _ignorePlacement = false;
+  private _declutterPadding: readonly number[] = [];
+  private _standalone = true;
+  private _pairGroup: number;
   /** Per-instance priorities set through the evaluator (NaN = no override,
    *  fall back to the layer value). Lazily allocated on first use. */
   private _declutterPriorityOverrides: Float32Array | null = null;
@@ -255,6 +268,7 @@ export class InstancedSpriteMesh
     this.renderOrder = options.renderOrder ?? this.renderOrder;
     this.ctx = options.ctx;
     this._geometryType = options.geometryType;
+    this._pairGroup = options.pairGroup ?? 0;
     this.ctx.declutter?.register(this);
     // `processObjectRemoved` dispatches this for every removed mesh; it is the
     // reliable teardown signal (this class's dispose() is not called there).
@@ -415,6 +429,7 @@ export class InstancedSpriteMesh
     const targets = this._declutterTargets;
     const outOfBand = this._outOfBand;
     const placed = this._linePlacement;
+    const bearings = state.instanceBearing ? this._bearings : null;
     const count = Math.min(this._instanceCount, anchors.length / 3);
 
     for (let i = 0; i < count; i++) {
@@ -442,8 +457,19 @@ export class InstancedSpriteMesh
 
       // Mirror of instancedSprite.vert.glsl — the quad spans
       // (position.xy - center) * vec2(aspect, 1) * size around the anchor,
-      // turned as `placeLineLabels` resolved for an along-line anchor.
+      // turned as `placeLineLabels` resolved for an along-line anchor, and by
+      // the kernel from the feature's own orientation (plus the line bearing
+      // the shader adds) otherwise.
       const p = i * LINE_ANCHOR_RESULT_STRIDE;
+      const packed = placed
+        ? undefined
+        : readBatchScalar(material, batchIndex, "orientation");
+      const orientation =
+        packed === undefined ? state : unpackOrientation(packed);
+      const rotation = placed
+        ? 0
+        : (readBatchScalar(material, batchIndex, "rotation") ??
+            state.rotation) + (bearings ? bearings[i] : 0);
       out.push({
         anchorX: anchors[i * 3],
         anchorY: anchors[i * 3 + 1],
@@ -454,9 +480,20 @@ export class InstancedSpriteMesh
         minY: placed ? placed[p + 3] : (-0.5 - cy) * size,
         maxY: placed ? placed[p + 4] : (0.5 - cy) * size,
         sizeInMeters: state.sizeInMeters,
+        rank: this._declutterRank,
         // NaN-safe: an unset override falls back to the layer priority.
         priority: Number.isNaN(override) ? this._declutterPriority : override,
         isShown: targets ? targets[i] === 0 : true,
+        overlap: this._overlap,
+        ignorePlacement: this._ignorePlacement,
+        padding: this._declutterPadding,
+        pairGroup: this._pairGroup,
+        featureIndex: batchIndex,
+        pairRole: "billboard",
+        standalone: this._standalone,
+        flatFacing: !placed && orientation.flatFacing,
+        rotateWithCamera: placed !== null || orientation.rotateWithCamera,
+        rotation,
         owner: this,
         handle: i,
       });
@@ -499,14 +536,19 @@ export class InstancedSpriteMesh
   }
 
   private _cacheDeclutterState(m: NavaraPointMesh | NavaraBillboardMesh) {
-    const nextDeclutter = m.material.declutter ?? true;
-    if (this._declutter && !nextDeclutter) {
+    const settings = resolveDeclutterSettings(m.material);
+    if (this._declutter && !settings.participates) {
       // Leaving declutter mode: clear hides the pass applied — the mesh stops
       // producing candidates, so nothing else would ever re-show them.
       this._clearDeclutterHidden();
     }
-    this._declutter = nextDeclutter;
-    this._declutterPriority = m.material.declutterPriority ?? 0;
+    this._declutter = settings.participates;
+    this._declutterRank = settings.rank;
+    this._declutterPriority = settings.priority;
+    this._overlap = settings.overlap;
+    this._ignorePlacement = settings.ignorePlacement;
+    this._declutterPadding = settings.padding;
+    this._standalone = settings.standalone;
   }
 
   private _clearDeclutterHidden(): void {

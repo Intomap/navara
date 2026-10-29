@@ -162,6 +162,24 @@ import { Color } from "@navaramap/three";
 }
 ```
 
+### declutterPadding
+
+**Type:** `number[] | undefined`
+
+**Description:** Extra space around the label's collision box, in screen pixels whatever [`sizeInMeters`](#sizeinmeters) is. One to four values, expanded like CSS padding: `[all]`, `[vertical, horizontal]`, `[top, horizontal, bottom]` or `[top, right, bottom, left]`. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `text-padding`.
+
+**Default:** `[2]`
+
+**Example:**
+
+```typescript
+{
+  text: {
+    declutterPadding: [4, 8]
+  }
+}
+```
+
 ### declutterPriority
 
 **Type:** `number | undefined`
@@ -177,6 +195,24 @@ import { Color } from "@navaramap/three";
   text: {
     declutter: true,
     declutterPriority: 1
+  }
+}
+```
+
+### declutterRank
+
+**Type:** `number | undefined`
+
+**Description:** Coarse placement order for decluttering, compared before [`declutterPriority`](#declutterpriority): every label of a material with a higher rank is placed before any label or sprite with a lower one, whatever their priorities. A per-feature `declutterPriority` therefore only reorders labels and sprites of the same rank. Only meaningful when [`declutter`](#declutter) is enabled.
+
+**Default:** `0.0`
+
+**Example:**
+
+```typescript
+{
+  text: {
+    declutterRank: 1
   }
 }
 ```
@@ -330,6 +366,24 @@ view.addFontFamily({
 {
   text: {
     height: 100 // 100 meters
+  }
+}
+```
+
+### ignorePlacement
+
+**Type:** `boolean | undefined`
+
+**Description:** Keeps this label's box out of the collision check, so labels and sprites placed after it can overlap it. The label itself still hides when it collides with one placed before it, unless [`overlap`](#overlap) allows it. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `text-ignore-placement`.
+
+**Default:** `false`
+
+**Example:**
+
+```typescript
+{
+  text: {
+    ignorePlacement: true
   }
 }
 ```
@@ -556,6 +610,24 @@ import { Color } from "@navaramap/three";
 {
   text: {
     outlineWidth: 2
+  }
+}
+```
+
+### overlap
+
+**Type:** `"never" | "always" | "cooperative" | undefined`
+
+**Description:** Whether the label may be drawn over labels and sprites placed before it (higher [`declutterRank`](#declutterrank), then higher [`declutterPriority`](#declutterpriority), places first). `"never"` hides it on any collision. `"always"` never hides it, and its box still keeps later `"never"` ones away unless [`ignorePlacement`](#ignoreplacement) is set. `"cooperative"` hides it only when it collides with a `"never"` one. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `text-overlap`.
+
+**Default:** `"never"`
+
+**Example:**
+
+```typescript
+{
+  text: {
+    overlap: "always"
   }
 }
 ```
@@ -788,6 +860,24 @@ Can also be set per feature from a [feature evaluator](../../api/feature-evaluat
     textFacing: "flat",
     rotateWithCamera: false, // Follow the line, like a MapLibre street name
     spreadGlyphs: true
+  }
+}
+```
+
+### standalone
+
+**Type:** `boolean | undefined`
+
+**Description:** Whether the label may show while the layer's billboard at the same anchor is hidden. Unless both are `standalone`, a layer's label and billboard of the same feature and anchor are placed as a pair, tested together so they never block each other. With `false`, the label is hidden whenever its billboard loses its spot, so `false` on both means both show or neither does. With `true` on both, they are placed independently and block each other where they overlap. Only meaningful when [`declutter`](#declutter) is enabled. MapLibre's `icon-optional` (inverted: `icon-optional: true` means `standalone: true` on the label).
+
+**Default:** `true`
+
+**Example:**
+
+```typescript
+{
+  text: {
+    standalone: false
   }
 }
 ```

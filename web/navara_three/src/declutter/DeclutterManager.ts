@@ -1,6 +1,11 @@
 import { Matrix4, type PerspectiveCamera } from "three";
 
-import { CANDIDATE_STRIDE, type DeclutterKernel } from "./kernel";
+import {
+  CANDIDATE_STRIDE,
+  OVERLAP_CODES,
+  PAIR_ROLE_CODES,
+  type DeclutterKernel,
+} from "./kernel";
 import type { DeclutterCandidate, DeclutterParticipant } from "./types";
 
 export type DeclutterUpdateResult =
@@ -38,9 +43,6 @@ export type DeclutterUpdateResult =
 export class DeclutterManager {
   /** Minimum time between placement passes (ms). */
   static readonly MIN_INTERVAL_MS = 150;
-  /** Padding added around every collision box (px); two labels never sit
-   *  closer than twice this. */
-  static readonly PADDING_PX = 2;
   /** Largest single fade step (ms), so a frame after an idle gap doesn't
    *  swallow most of a fade in one jump. */
   static readonly MAX_FADE_STEP_MS = 50;
@@ -78,9 +80,21 @@ export class DeclutterManager {
   private _view16 = new Float64Array(16);
   private _proj16 = new Float64Array(16);
 
-  /** @param _kernel the placement kernel — the Rust-backed
-   *  `wasmDeclutterKernel` in production, a stub in unit tests. */
-  constructor(private readonly _kernel: DeclutterKernel) {}
+  /** True while `update()` runs, which consumes the dirty flag itself. */
+  private _updating = false;
+
+  /**
+   * @param _kernel the placement kernel — the Rust-backed
+   *  `wasmDeclutterKernel` in production, a stub in unit tests.
+   * @param _requestFrame asks the view for a frame. Meshes mark the pass dirty
+   *  from async work (a material update lands after the frame that delivered
+   *  it), and the view renders only on request, so without a frame the pass
+   *  would wait for the next camera move.
+   */
+  constructor(
+    private readonly _kernel: DeclutterKernel,
+    private readonly _requestFrame: () => void = () => {},
+  ) {}
 
   /** Milliseconds until the throttle window since the last placement pass
    *  elapses, clamped to `[0, MIN_INTERVAL_MS]`. Callers use this to schedule
@@ -111,6 +125,7 @@ export class DeclutterManager {
   markDirty(immediate = false): void {
     this._dirty = true;
     if (immediate) this._lastRunAt = Number.NEGATIVE_INFINITY;
+    if (!this._updating) this._requestFrame();
   }
 
   /**
@@ -155,7 +170,21 @@ export class DeclutterManager {
     horizonMinHeight: number,
   ): DeclutterUpdateResult {
     if (this._participants.size === 0) return "idle";
+    this._updating = true;
+    try {
+      return this._update(camera, widthPx, heightPx, nowMs, horizonMinHeight);
+    } finally {
+      this._updating = false;
+    }
+  }
 
+  private _update(
+    camera: PerspectiveCamera,
+    widthPx: number,
+    heightPx: number,
+    nowMs: number,
+    horizonMinHeight: number,
+  ): DeclutterUpdateResult {
     let ran = false;
     let throttled = false;
     if (
@@ -239,6 +268,20 @@ export class DeclutterManager {
       input[o + 8] = c.sizeInMeters ? 1 : 0;
       input[o + 9] = c.priority;
       input[o + 10] = c.isShown ? 1 : 0;
+      input[o + 11] = OVERLAP_CODES[c.overlap];
+      input[o + 12] = c.ignorePlacement ? 1 : 0;
+      input[o + 13] = c.rank;
+      input[o + 14] = c.padding[0];
+      input[o + 15] = c.padding[1];
+      input[o + 16] = c.padding[2];
+      input[o + 17] = c.padding[3];
+      input[o + 18] = c.pairGroup;
+      input[o + 19] = c.featureIndex;
+      input[o + 20] = c.pairGroup === 0 ? 0 : PAIR_ROLE_CODES[c.pairRole];
+      input[o + 21] = c.standalone ? 1 : 0;
+      input[o + 22] = c.flatFacing ? 1 : 0;
+      input[o + 23] = c.rotateWithCamera ? 1 : 0;
+      input[o + 24] = c.rotation;
     }
 
     // The pass may run before the renderer refreshed matrixWorldInverse, so
@@ -264,7 +307,6 @@ export class DeclutterManager {
       // is a WASM call whose result we'd only marshal straight back in.
       (camera.fov * Math.PI) / 180.0,
       horizonMinHeight,
-      DeclutterManager.PADDING_PX,
       DeclutterManager.HYSTERESIS_PX,
     );
 

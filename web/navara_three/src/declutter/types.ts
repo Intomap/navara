@@ -1,5 +1,7 @@
 import type { PerspectiveCamera } from "three";
 
+import type { Overlap } from "../type";
+
 /**
  * One label/sprite competing for screen space in a declutter pass.
  *
@@ -24,8 +26,39 @@ export type DeclutterCandidate = {
   maxY: number;
   /** Unit of the local box, mirroring the material's `sizeInMeters`. */
   sizeInMeters: boolean;
+  /** Compared before `priority`: a higher rank places first. */
+  rank: number;
   /** Placement priority: higher wins an overlap. */
   priority: number;
+  /** Which earlier candidates this one may overlap (MapLibre's `*-overlap`). */
+  overlap: Overlap;
+  /** Leave the box out of the collision grid, so later candidates may overlap
+   *  it (MapLibre's `*-ignore-placement`). */
+  ignorePlacement: boolean;
+  /** Screen pixels added around the box once projected, as
+   *  `[top, right, bottom, left]` (MapLibre's `*-padding`). */
+  padding: readonly number[];
+  /**
+   * Pairs a label with the billboard of the same feature at the nearest
+   * anchor, as MapLibre places a symbol's text and icon together: the layer
+   * and tile both belong to ({@link declutterPairGroup}), `0` for never
+   * paired. `featureIndex` is the feature's index in the group and `pairRole`
+   * which of the two this is.
+   */
+  pairGroup: number;
+  featureIndex: number;
+  pairRole: "label" | "billboard";
+  /** Whether it may show while its paired partner is hidden. */
+  standalone: boolean;
+  /**
+   * How the quad is turned, as the vertex shader lays it out (`rotation` in
+   * radians, clockwise from the front); the kernel turns the box to match.
+   * A box already as drawn (turned by line placement) is screen-aligned:
+   * not flat facing, rotating with the camera, rotation `0`.
+   */
+  flatFacing: boolean;
+  rotateWithCamera: boolean;
+  rotation: number;
   /** Whether the label is currently shown (its fade target is "visible").
    *  Feeds placement hysteresis: shown labels win equal-priority ties and
    *  tolerate marginal overlaps, so slow camera drift doesn't make near-tied
@@ -45,8 +78,19 @@ export type DeclutterCandidate = {
   contentKey?: string;
 };
 
-/** Duration of the show/hide fade applied to placement results (ms). */
-export const DECLUTTER_FADE_MS = 300;
+/** The declutter fields a participant mirrors from its material. */
+export type DeclutterSettings = {
+  /** Whether the material's labels take part in the pass at all. A
+   *  standalone `always` label that ignores placement can neither lose nor
+   *  block, so it stays out like a `declutter: false` one. */
+  participates: boolean;
+  rank: number;
+  priority: number;
+  overlap: Overlap;
+  ignorePlacement: boolean;
+  padding: readonly number[];
+  standalone: boolean;
+};
 
 /** A mesh that contributes label candidates to the shared declutter pass. */
 export type DeclutterParticipant = {

@@ -200,6 +200,40 @@ impl Placement {
     }
 }
 
+/// Whether a decluttered label or sprite may be drawn over symbols placed
+/// before it (MapLibre's `*-overlap`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Overlap {
+    /// Hidden when it collides with any symbol placed before it.
+    #[default]
+    Never,
+    /// Shown whatever it collides with.
+    Always,
+    /// Hidden only when it collides with a symbol placed with [`Overlap::Never`].
+    Cooperative,
+}
+
+impl Overlap {
+    /// Parse the JS-facing name (`"never" | "always" | "cooperative"`).
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "never" => Some(Self::Never),
+            "always" => Some(Self::Always),
+            "cooperative" => Some(Self::Cooperative),
+            _ => None,
+        }
+    }
+
+    /// JS-facing name of this overlap mode.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+            Self::Always => "always",
+            Self::Cooperative => "cooperative",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Appearance {
     Point(PointMaterial),
@@ -294,9 +328,24 @@ pub struct PointMaterial {
     /// on screen, lower-priority ones are hidden. Enabled by default; set to
     /// `false` to draw every label unconditionally.
     pub declutter: bool,
+    /// Coarse placement order for decluttering, compared before
+    /// `declutter_priority`: every label with a higher rank is placed before
+    /// any label with a lower one. Only meaningful when `declutter` is enabled.
+    pub declutter_rank: f32,
     /// Placement priority for decluttering; higher wins. Only meaningful when
     /// `declutter` is enabled.
     pub declutter_priority: f32,
+    /// Extra space around the collision box, in screen pixels, as
+    /// `[top, right, bottom, left]`. Only meaningful when `declutter` is
+    /// enabled. Default `2.0` on every side.
+    pub declutter_padding: [f32; 4],
+    /// Whether the label may be drawn over symbols placed before it. Only
+    /// meaningful when `declutter` is enabled. Default [`Overlap::Never`].
+    pub overlap: Overlap,
+    /// Leave this label's box out of the collision grid, so symbols placed
+    /// after it may overlap it. Only meaningful when `declutter` is enabled.
+    /// Default `false`.
+    pub ignore_placement: bool,
     /// Source geometry types this appearance consumes. Defaults to the native
     /// geometry only; opting in `Line`/`Polygon` also emits a point per
     /// line-string / polygon-ring vertex, or along them with `placement`.
@@ -329,7 +378,11 @@ impl Default for PointMaterial {
             transparent: true,
             opacity: 1.0,
             declutter: true,
+            declutter_rank: 0.0,
             declutter_priority: 0.0,
+            declutter_padding: [2.0; 4],
+            overlap: Overlap::Never,
+            ignore_placement: false,
             geometry_types: vec![SourceGeometryType::Point],
             // post effect
             effect_ids: None,
@@ -392,9 +445,29 @@ pub struct BillboardMaterial {
     /// on screen, lower-priority ones are hidden. Enabled by default; set to
     /// `false` to draw every label unconditionally.
     pub declutter: bool,
+    /// Coarse placement order for decluttering, compared before
+    /// `declutter_priority`: every label with a higher rank is placed before
+    /// any label with a lower one. Only meaningful when `declutter` is enabled.
+    pub declutter_rank: f32,
     /// Placement priority for decluttering; higher wins. Only meaningful when
     /// `declutter` is enabled.
     pub declutter_priority: f32,
+    /// Extra space around the collision box, in screen pixels, as
+    /// `[top, right, bottom, left]`. Only meaningful when `declutter` is
+    /// enabled. Default `2.0` on every side.
+    pub declutter_padding: [f32; 4],
+    /// Whether the label may be drawn over symbols placed before it. Only
+    /// meaningful when `declutter` is enabled. Default [`Overlap::Never`].
+    pub overlap: Overlap,
+    /// Leave this label's box out of the collision grid, so symbols placed
+    /// after it may overlap it. Only meaningful when `declutter` is enabled.
+    /// Default `false`.
+    pub ignore_placement: bool,
+    /// Whether the billboard may show while the layer's label at the same
+    /// anchor is hidden. With `false` on both, a billboard and the label of
+    /// the same feature and anchor are placed together. Only meaningful when
+    /// `declutter` is enabled. Default `true`.
+    pub standalone: bool,
     /// Source geometry types this appearance consumes. Defaults to the native
     /// geometry only; opting in `Line` also emits a billboard per line string,
     /// at its first vertex, and `Polygon` one per polygon — or along either
@@ -430,7 +503,12 @@ impl Default for BillboardMaterial {
             opacity: 1.0,
             alpha_test: 0.1,
             declutter: true,
+            declutter_rank: 0.0,
             declutter_priority: 0.0,
+            declutter_padding: [2.0; 4],
+            overlap: Overlap::Never,
+            ignore_placement: false,
+            standalone: true,
             geometry_types: vec![SourceGeometryType::Point],
             // post effect
             effect_ids: None,
@@ -572,9 +650,29 @@ pub struct TextMaterial {
     /// on screen, lower-priority ones are hidden. Enabled by default; set to
     /// `false` to draw every label unconditionally.
     pub declutter: bool,
+    /// Coarse placement order for decluttering, compared before
+    /// `declutter_priority`: every label with a higher rank is placed before
+    /// any label with a lower one. Only meaningful when `declutter` is enabled.
+    pub declutter_rank: f32,
     /// Placement priority for decluttering; higher wins. Only meaningful when
     /// `declutter` is enabled.
     pub declutter_priority: f32,
+    /// Extra space around the collision box, in screen pixels, as
+    /// `[top, right, bottom, left]`. Only meaningful when `declutter` is
+    /// enabled. Default `2.0` on every side.
+    pub declutter_padding: [f32; 4],
+    /// Whether the label may be drawn over symbols placed before it. Only
+    /// meaningful when `declutter` is enabled. Default [`Overlap::Never`].
+    pub overlap: Overlap,
+    /// Leave this label's box out of the collision grid, so symbols placed
+    /// after it may overlap it. Only meaningful when `declutter` is enabled.
+    /// Default `false`.
+    pub ignore_placement: bool,
+    /// Whether the label may show while the layer's billboard at the same
+    /// anchor is hidden. With `false` on both, a label and the billboard of
+    /// the same feature and anchor are placed together. Only meaningful when
+    /// `declutter` is enabled. Default `true`.
+    pub standalone: bool,
     /// Source geometry types this appearance consumes. Defaults to the native
     /// geometry only; opting in `Line` also emits a label per line string, at
     /// its first vertex, and `Polygon` one per polygon — or along either with
@@ -632,7 +730,12 @@ impl Default for TextMaterial {
             letter_spacing: 0.0,
 
             declutter: true,
+            declutter_rank: 0.0,
             declutter_priority: 0.0,
+            declutter_padding: [2.0; 4],
+            overlap: Overlap::Never,
+            ignore_placement: false,
+            standalone: true,
             geometry_types: vec![SourceGeometryType::Point],
             // post effect
             effect_ids: None,

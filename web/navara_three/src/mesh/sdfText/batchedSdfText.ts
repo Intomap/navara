@@ -29,8 +29,11 @@ import {
 } from "../../batchTexture";
 import {
   DECLUTTER_FADE_MS,
-  type DeclutterCandidate,
-  type DeclutterParticipant,
+  resolveDeclutterSettings,
+} from "../../declutter/participant";
+import type {
+  DeclutterCandidate,
+  DeclutterParticipant,
 } from "../../declutter/types";
 import type { EventContext } from "../../event/context";
 import type { MaterialEnhancer } from "../../material/enhancer/MaterialEnhancer";
@@ -44,6 +47,7 @@ import {
   resolveOrientation,
   type ResolvedOrientation,
 } from "../../material/orientation";
+import type { Overlap } from "../../type";
 import { buildBatchIndexMap } from "../batchIndexMap";
 import { GEOMETRY_TYPES } from "../constants";
 import { InstancedMesh, type InstancedMeshOptions } from "../instanced";
@@ -319,7 +323,15 @@ export class BatchedSdfTextMesh
 
   /** Layer-level declutter settings, mirrored from the material. */
   private _declutter: boolean;
+  private _declutterRank: number;
   private _declutterPriority: number;
+  private _overlap: Overlap;
+  private _ignorePlacement: boolean;
+  private _declutterPadding: readonly number[];
+  private _standalone: boolean;
+  /** Declutter pair group shared with the layer's billboards in this tile;
+   *  `0` when unpaired. */
+  private readonly _pairGroup: number;
   /** Skips the per-frame fade walk entirely once everything has settled. */
   private _declutterAnimating = false;
 
@@ -335,11 +347,12 @@ export class BatchedSdfTextMesh
     ctx: EventContext,
     m: NavaraTextMesh,
     fontIdentifier: string,
-    options: InstancedMeshOptions,
+    options: InstancedMeshOptions & { pairGroup?: number },
     loadedFaceUrls?: Set<string>,
   ) {
     super(options);
     this.ctx = ctx;
+    this._pairGroup = options.pairGroup ?? 0;
     this._fontIdentifier = fontIdentifier;
     invariant(ctx.fontManager);
     this._fontManager = ctx.fontManager;
@@ -357,8 +370,14 @@ export class BatchedSdfTextMesh
     this._lineHeight = material.lineHeight ?? 1.0;
     this._textAlign = ALIGN_FACTORS[material.textAlign ?? "center"] ?? 0.5;
     this._spreadGlyphs = material.spreadGlyphs ?? false;
-    this._declutter = material.declutter ?? true;
-    this._declutterPriority = material.declutterPriority ?? 0;
+    const declutter = resolveDeclutterSettings(material);
+    this._declutter = declutter.participates;
+    this._declutterRank = declutter.rank;
+    this._declutterPriority = declutter.priority;
+    this._overlap = declutter.overlap;
+    this._ignorePlacement = declutter.ignorePlacement;
+    this._declutterPadding = declutter.padding;
+    this._standalone = declutter.standalone;
 
     this._positions = this.extractPositions(m);
     this._path = takeLinePath(this._positions);
@@ -1343,6 +1362,7 @@ export class BatchedSdfTextMesh
     const cy = Math.min(Math.max(state.center[1], -0.5), 0.5);
 
     const boxes = this._lineBoxes;
+    const defaults = this._orientationDefaults();
     for (const record of this._labels) {
       if (!record.show || record.widthEm <= 0) continue;
       const size = record.fontSize;
@@ -1354,17 +1374,20 @@ export class BatchedSdfTextMesh
       const w = record.widthEm;
       const h = record.heightEm;
       // Line labels are turned to follow their road, so the placement pass
-      // hands back the box they actually cover; everything else is a
-      // screen-aligned block around its anchor.
+      // hands back the box they actually cover; everything else is its block
+      // around the anchor, which the kernel turns as the shader does.
       //
       // A label created since the last pass has no box yet. Falling back to the
       // unrotated block matters: reading past the array would put `undefined`
       // — and then NaN — into the packed candidate, and a NaN box never
       // registers a collision, so the label would silently overlap everything.
-      // A plain point in a line batch is screen-aligned like any other label.
+      // A plain point in a line batch is a block like any other point label.
       const b = record.slot * 4;
-      const hasBox =
-        boxes !== null && b + 3 < boxes.length && this._isAlongLine(record);
+      const alongLine = this._isAlongLine(record);
+      const hasBox = boxes !== null && b + 3 < boxes.length && alongLine;
+      const orientation = alongLine
+        ? defaults
+        : this._resolveOrientation(record.batchIndex, defaults);
       out.push({
         anchorX: record.anchor[0],
         anchorY: record.anchor[1],
@@ -1375,8 +1398,21 @@ export class BatchedSdfTextMesh
         minY: hasBox ? boxes[b + 2] : (record.minYEm - cy * h) * size,
         maxY: hasBox ? boxes[b + 3] : (record.maxYEm - cy * h) * size,
         sizeInMeters: state.sizeInMeters,
+        rank: this._declutterRank,
         priority: record.priorityOverride ?? this._declutterPriority,
         isShown: record.declutterTarget === 0,
+        overlap: this._overlap,
+        ignorePlacement: this._ignorePlacement,
+        padding: this._declutterPadding,
+        pairGroup: this._pairGroup,
+        featureIndex: record.batchIndex,
+        pairRole: "label",
+        standalone: this._standalone,
+        flatFacing: !alongLine && orientation.flatFacing,
+        rotateWithCamera: alongLine || orientation.rotateWithCamera,
+        rotation: alongLine
+          ? 0
+          : this._resolveRotation(record.batchIndex, defaults.rotation),
         owner: this,
         handle: record.slot,
         contentKey: record.text,
@@ -1692,8 +1728,8 @@ export class BatchedSdfTextMesh
 
     // Read before applying visibility: the declutter pass consults these even
     // while other style state is skipped for hidden labels.
-    const nextDeclutter = material.declutter ?? true;
-    if (this._declutter && !nextDeclutter) {
+    const declutter = resolveDeclutterSettings(material);
+    if (this._declutter && !declutter.participates) {
       // Leaving declutter mode: clear any hide the pass applied — the batch
       // stops producing candidates, so nothing else would ever re-show it.
       for (const record of this._labels) {
@@ -1701,8 +1737,13 @@ export class BatchedSdfTextMesh
         if (record.declutterHide !== 0) this._declutterAnimating = true;
       }
     }
-    this._declutter = nextDeclutter;
-    this._declutterPriority = material.declutterPriority ?? 0;
+    this._declutter = declutter.participates;
+    this._declutterRank = declutter.rank;
+    this._declutterPriority = declutter.priority;
+    this._overlap = declutter.overlap;
+    this._ignorePlacement = declutter.ignorePlacement;
+    this._declutterPadding = declutter.padding;
+    this._standalone = declutter.standalone;
 
     this._enhancer.update({
       base: {

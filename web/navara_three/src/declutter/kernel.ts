@@ -1,3 +1,5 @@
+import type { Overlap } from "../type";
+
 /**
  * The pure numeric placement kernel used by {@link DeclutterManager}.
  *
@@ -34,7 +36,6 @@ export type DeclutterKernel = {
     heightPx: number,
     fovRad: number,
     horizonMinHeight: number,
-    paddingPx: number,
     hysteresisPx: number,
   ): Uint8Array;
 };
@@ -44,6 +45,19 @@ export type DeclutterKernel = {
  * sync with `CANDIDATE_STRIDE` in `crates/navara_wasm_api/src/declutter.rs`.
  *
  * Layout: `[anchorX, anchorY, anchorZ, addHeight, minX, maxX, minY, maxY,
- * sizeInMeters, priority, isShown]`.
+ * sizeInMeters, priority, isShown, overlap, ignorePlacement, rank, paddingTop,
+ * paddingRight, paddingBottom, paddingLeft, pairGroup, featureIndex, pairRole,
+ * standalone, flatFacing, rotateWithCamera, rotation]`, with `overlap` coded by
+ * {@link OVERLAP_CODES} and `pairRole` by {@link PAIR_ROLE_CODES}.
  */
-export const CANDIDATE_STRIDE = 11;
+export const CANDIDATE_STRIDE = 25;
+
+/** Kernel codes for a candidate's pair role; `0` is unpaired. */
+export const PAIR_ROLE_CODES = { label: 1, billboard: 2 } as const;
+
+/** Kernel codes for {@link Overlap}. */
+export const OVERLAP_CODES: Record<Overlap, number> = {
+  never: 0,
+  always: 1,
+  cooperative: 2,
+};
