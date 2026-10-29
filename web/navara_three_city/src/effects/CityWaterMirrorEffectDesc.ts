@@ -204,6 +204,11 @@ class WaterMirror {
     try {
       renderer.shadowMap.autoUpdate = false;
       uniforms.uMirrorOn.value = 0;
+      // The water materials sample `uMirror`; re-rendering the scene into the
+      // mirror target would leave that sampler pointing at the framebuffer being
+      // written, which WebGL rejects as a feedback loop. Point it at a blank
+      // texture for the duration of this pass.
+      uniforms.uMirror.value = uniforms.uBlank.value;
       if (!hadLights) scene.add(ctx.scenes.light);
       // Clear to transparent black like the Tokyo reference: the water shader's
       // `thing` mask then separates real geometry from empty sky, instead of an
@@ -226,6 +231,7 @@ class WaterMirror {
           : after.triangles - before.triangles;
       uniforms.uMirrorOn.value = 1;
     } finally {
+      uniforms.uMirror.value = this.target.texture;
       this.objectVisibility.forEach((visible, object) => {
         object.visible = visible;
       });

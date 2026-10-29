@@ -44,13 +44,7 @@ export function createCityControls(
 
   const light = pane.addFolder({ title: "Light / Shadows", expanded: false });
   light
-    .addBinding(state, "sun", { min: 0, max: 3, step: 0.05 })
-    .on("change", (event) => actions.setSun(event.value));
-  light
-    .addBinding(state, "sky", { min: 0, max: 8, step: 0.1 })
-    .on("change", (event) => actions.setSky(event.value));
-  light
-    .addBinding(state, "ambient", { min: 0, max: 2.5, step: 0.05 })
+    .addBinding(state, "ambient", { min: 0, max: 3, step: 0.05 })
     .on("change", (event) => actions.setAmbient(event.value));
   light
     .addBinding(state, "shadowIntensity", {

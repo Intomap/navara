@@ -152,6 +152,16 @@ function injectGBuffer(
           #endif
           ${GBUFFER_NORMAL_WRITE_BASIC}
         `;
+  // Emissive reaches the buffer independent of `USE_SELECTIVE_EFFECT` so the
+  // deferred lighting pass can read it back. `totalEmissiveRadiance` is the
+  // standard/physical accumulation (night lights patch it in onBeforeCompile);
+  // lambert/phong have the bare `emissive` uniform; basic has none.
+  const emissiveBufferWrite =
+    type === "physical"
+      ? /* glsl */ `GBUFFER_WRITE_EMISSIVE(totalEmissiveRadiance)`
+      : type === "basic"
+        ? /* glsl */ `GBUFFER_WRITE_EMISSIVE_ZERO`
+        : /* glsl */ `GBUFFER_WRITE_EMISSIVE(emissive)`;
   shader.fragmentShader = /* glsl */ `
     ${GBUFFER_PARS_FRAGMENT}
 
@@ -202,6 +212,8 @@ function injectGBuffer(
             #else
               ${GBUFFER_EFFECT_WRITE_ZERO}
             #endif
+
+            ${emissiveBufferWrite}
 
             GBUFFER_WRITE_SHADOW
           #endif

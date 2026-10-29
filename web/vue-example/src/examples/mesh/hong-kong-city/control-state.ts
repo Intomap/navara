@@ -31,8 +31,6 @@ export type CityControlState = {
   time: number;
   exposure: number;
   bloom: number;
-  sun: number;
-  sky: number;
   ambient: number;
   radius: number;
   concurrency: number;
@@ -61,8 +59,6 @@ export type CityControlActions = {
   setTime: (value: number) => void;
   setExposure: (value: number) => void;
   setBloom: (value: number) => void;
-  setSun: (value: number) => void;
-  setSky: (value: number) => void;
   setAmbient: (value: number) => void;
   setShadow: (value: Partial<ShadowControlSettings>) => void;
   setCity: (value: Partial<CityOptions>) => void;
@@ -84,10 +80,10 @@ export type CityPerformance = CityRenderStats & {
 
 export function createNightLightControlState(): NightLightControlState {
   return {
-    streetLights: 1,
+    streetLights: 0.3,
     parkLights: 0.3,
     headlights: 5,
-    windowLight: 1.75,
+    windowLight: 0.6,
     windowSoftness: 1,
     windowSpareRate: 0.5,
     windowSparePace: 6,
@@ -100,11 +96,9 @@ export function createCityControlState(): CityControlState {
   return {
     ...createNightLightControlState(),
     time: 12,
-    exposure: 2.2,
+    exposure: 3.5,
     bloom: 0.06,
-    sun: 1.2,
-    sky: 3,
-    ambient: 0.65,
+    ambient: 0.9,
     shadowIntensity: 0.72,
     shadowFar: 2000,
     shadowMapSize: 4096,
@@ -115,7 +109,7 @@ export function createCityControlState(): CityControlState {
     concurrency: 4,
     quality: "high",
     ortho: true,
-    googleMap: true,
+    googleMap: false,
     traffic: true,
     cars: 260,
     trains: true,

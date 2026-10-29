@@ -32,10 +32,6 @@ export type AerialPerspectiveConfig = Description & EffectConfig;
 export type AerialPerspectiveUpdate = Description & EffectUpdate;
 
 const REQUIRED_BUFFERS: readonly GBufferName[] = ["normal"];
-const REQUIRED_BUFFERS_WITH_SHADOW: readonly GBufferName[] = [
-  "normal",
-  "shadow",
-];
 
 export class AerialPerspectiveEffectDesc extends EffectDesc<
   AerialPerspectiveConfig,
@@ -48,6 +44,7 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
   private config: AerialPerspectiveConfig;
   private shadowTerm: boolean;
   private specularTerm: boolean;
+  private irradianceTerm: boolean;
 
   constructor(
     view: ThreeView,
@@ -59,6 +56,7 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
     const description = config.aerialPerspective ?? {};
     this.shadowTerm = description.shadow ?? false;
     this.specularTerm = description.specular ?? false;
+    this.irradianceTerm = description.irradiance ?? false;
   }
 
   /**
@@ -66,9 +64,14 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
    * deferred-lit mask. Read before `onCreate`.
    */
   getRequiredBuffers(): readonly GBufferName[] {
-    return this.shadowTerm || this.specularTerm
-      ? REQUIRED_BUFFERS_WITH_SHADOW
-      : REQUIRED_BUFFERS;
+    const buffers: GBufferName[] = [...REQUIRED_BUFFERS];
+    if (this.shadowTerm || this.specularTerm) {
+      buffers.push("shadow");
+    }
+    if (this.irradianceTerm) {
+      buffers.push("emissive");
+    }
+    return buffers;
   }
 
   createPass() {
@@ -109,6 +112,10 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
       this._instance.transmittance = config.transmittance;
     }
     if (config.irradiance !== undefined) {
+      if (this.irradianceTerm !== config.irradiance) {
+        this.irradianceTerm = config.irradiance;
+        this.ctx.emit("gbufferRequirementsChanged");
+      }
       this._instance.irradiance = config.irradiance;
     }
     if (config.sky !== undefined) {
@@ -165,6 +172,9 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
     if (config.specularIntensity !== undefined) {
       effect.specularIntensity = config.specularIntensity;
     }
+    if (config.ambientIntensity !== undefined) {
+      effect.ambientIntensity = config.ambientIntensity;
+    }
   }
 
   update(_time: number): void {
@@ -174,6 +184,7 @@ export class AerialPerspectiveEffectDesc extends EffectDesc<
     // Re-fetched every frame: a G-buffer rebuild swaps the texture objects.
     instance.setNormalBuffer(this.ctx.getNormalTexture() ?? null);
     instance.rawEffect.setShadowBuffer(this.ctx.getShadowTexture() ?? null);
+    instance.rawEffect.setEmissiveBuffer(this.ctx.getEmissiveTexture() ?? null);
     instance._update();
   }
 }

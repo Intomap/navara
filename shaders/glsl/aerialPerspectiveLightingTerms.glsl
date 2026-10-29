@@ -5,6 +5,8 @@
 
 uniform float nvrShadowIntensity;
 uniform float nvrSpecularIntensity;
+uniform float nvrAmbientIntensity;
+uniform sampler2D nvrEmissiveBuffer;
 
 #ifdef NVR_SPECULAR
 
@@ -103,6 +105,12 @@ vec3 nvrGetSunSkyIrradiance(
 
   vec3 radiance = diffuse * (sunIrradiance + skyIrradiance);
 
+  // Neutral ambient fill for deferred-lit pixels. Forward-lit pixels get
+  // their ambient from the forward lights, so it is not added again.
+  if (deferredLit) {
+    radiance += diffuse * vec3(nvrAmbientIntensity);
+  }
+
   #ifdef NVR_SPECULAR
   if (deferredLit) {
     // Normal buffer: B = reflectance at normal incidence (F0), A = roughness
@@ -126,6 +134,13 @@ vec3 nvrGetSunSkyIrradiance(
     }
   }
   #endif // NVR_SPECULAR
+
+  // Emissive (night lights, signage) is self-lit: add it back unmodified.
+  // Forward-lit pixels carry their own emissive already, so only the
+  // deferred-lit (albedo-output) ones read it back.
+  if (deferredLit) {
+    radiance += texture(nvrEmissiveBuffer, uv).rgb;
+  }
 
   return radiance;
 }

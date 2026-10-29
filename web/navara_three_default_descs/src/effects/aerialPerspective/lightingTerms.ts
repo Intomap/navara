@@ -20,6 +20,8 @@ export type AerialPerspectiveLightingOptions = {
   specular?: boolean;
   /** Scales the specular reflection. */
   specularIntensity?: number;
+  /** Neutral ambient irradiance added to deferred-lit pixels (0 = off). */
+  ambientIntensity?: number;
 };
 
 export const DEFAULT_AERIAL_PERSPECTIVE_LIGHTING_OPTIONS: Required<AerialPerspectiveLightingOptions> =
@@ -30,6 +32,7 @@ export const DEFAULT_AERIAL_PERSPECTIVE_LIGHTING_OPTIONS: Required<AerialPerspec
     shadowSamples: 12,
     specular: false,
     specularIntensity: 1,
+    ambientIntensity: 0,
   };
 
 const MAIN_IMAGE_SIGNATURE =
@@ -94,6 +97,7 @@ export class AerialPerspectiveLightingEffect extends AerialPerspectiveEffect {
       shadowSamples,
       specular,
       specularIntensity,
+      ambientIntensity,
     } = { ...DEFAULT_AERIAL_PERSPECTIVE_LIGHTING_OPTIONS, ...lighting };
 
     // Before the pass compiles: uniforms are collected at compile time.
@@ -103,6 +107,8 @@ export class AerialPerspectiveLightingEffect extends AerialPerspectiveEffect {
     uniforms.set("nvrShadowIntensity", new Uniform(shadowIntensity));
     uniforms.set("nvrShadowSoftness", new Uniform(shadowSoftness));
     uniforms.set("nvrSpecularIntensity", new Uniform(specularIntensity));
+    uniforms.set("nvrEmissiveBuffer", new Uniform(null));
+    uniforms.set("nvrAmbientIntensity", new Uniform(ambientIntensity));
 
     this._shadow = shadow;
     this._shadowSoftness = shadowSoftness;
@@ -131,6 +137,12 @@ export class AerialPerspectiveLightingEffect extends AerialPerspectiveEffect {
   /** The shadow G-buffer attachment (R = shadow amount, G = deferred-lit flag). */
   setShadowBuffer(texture: Texture | null): void {
     const uniform = this.lightingUniforms.get("nvrShadowBuffer");
+    if (uniform) uniform.value = texture;
+  }
+
+  /** The emissive G-buffer attachment (RGB = HDR emissive). */
+  setEmissiveBuffer(texture: Texture | null): void {
+    const uniform = this.lightingUniforms.get("nvrEmissiveBuffer");
     if (uniform) uniform.value = texture;
   }
 
@@ -189,6 +201,14 @@ export class AerialPerspectiveLightingEffect extends AerialPerspectiveEffect {
   }
   set specularIntensity(value: number) {
     const uniform = this.lightingUniforms.get("nvrSpecularIntensity");
+    if (uniform) uniform.value = value;
+  }
+
+  get ambientIntensity(): number {
+    return this.lightingUniforms.get("nvrAmbientIntensity")?.value as number;
+  }
+  set ambientIntensity(value: number) {
+    const uniform = this.lightingUniforms.get("nvrAmbientIntensity");
     if (uniform) uniform.value = value;
   }
 }

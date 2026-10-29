@@ -13,7 +13,6 @@ import {
 import {
   ToneMappingMode,
   SSREffectDesc,
-  type AmbientLightDesc,
   type CloudsEffectDesc,
 } from "@navaramap/three-default-descs";
 import {
@@ -66,17 +65,18 @@ export async function run(ctx: ExampleContext): Promise<ExampleRunResult> {
     url: "https://mt2.google.com/vt/lyrs=s&hl=en-US&x={x}&y={y}&z={z}",
     maxZoom: 20,
   });
-  let satelliteLayer: Layer | undefined = view.addLayer({
-    type: "raster",
-    source: satellite,
-  });
+  let satelliteLayer: Layer | undefined;
 
-  const scene = defaultPlugin.addDefaultPhotorealScene({ shadow: false });
-  scene.skyLightProbe.update({ skyLightProbe: { intensity: 3 } });
+  const scene = defaultPlugin.addDefaultPhotorealScene({
+    deferredLighting: true,
+    shadow: true,
+  });
   scene.aerialPerspective.update({
-    aerialPerspective: { sun: true, sky: true, irradiance: false },
+    aerialPerspective: { sun: true, sky: true, ambientIntensity: 0.9 },
   });
   scene.toneMapping.update({ toneMapping: { mode: ToneMappingMode.NEUTRAL } });
+  // The deferred sun light only casts the cascaded shadow map into the shadow
+  // G-buffer; its intensity no longer lights the scene (view.lit is false).
   scene.sun.update({
     sun: {
       castShadow: true,
@@ -84,20 +84,14 @@ export async function run(ctx: ExampleContext): Promise<ExampleRunResult> {
       shadowMargin: 500,
       shadowCascadeCount: 1,
       shadowMapSize: 4096,
-      shadowIntensity: 0.72,
       shadowNormalBias: 0.55,
-      intensity: 1.2,
       shadowBias: 0.00008,
     },
   });
-  view.lit = true;
-  view.toneMappingExposure = 2.2;
+  view.toneMappingExposure = 3.5;
   view.atmosphere.date = new Date(
     Date.UTC(2026, 6, 16, INITIAL_HOUR_HKT - HKT_OFFSET_HOURS),
   );
-  const fill = view.addLight<AmbientLightDesc>({
-    ambient: { intensity: 0.65 },
-  });
   const bloom = view.addEffect<CityBloomEffectDesc>({
     cityBloom: { intensity: 0.06, threshold: 1.1, smoothing: 0.2 },
   });
@@ -168,20 +162,16 @@ export async function run(ctx: ExampleContext): Promise<ExampleRunResult> {
       Math.max(Math.max((7 - hour) / 2, (hour - 17) / 5), 0),
       1,
     );
-    controlState.exposure = 2.2 + night * 0.8;
-    controlState.ambient = 0.65 - night * 0.5;
-    controlState.sky = 3 - night * 2.85;
-    controlState.sun = 1.2 - night * 1.12;
+    controlState.exposure = 3.5 - night * 1.5;
+    controlState.ambient = 0.9 - night * 0.5;
     controlState.bloom = 0.06 + night * 0.28;
     view.atmosphere.date = new Date(
       Date.UTC(2026, 6, 16, -HKT_OFFSET_HOURS) + hour * 3_600_000,
     );
     view.toneMappingExposure = controlState.exposure;
-    fill.update({ ambient: { intensity: controlState.ambient } });
-    scene.skyLightProbe.update({
-      skyLightProbe: { intensity: controlState.sky },
+    scene.aerialPerspective.update({
+      aerialPerspective: { ambientIntensity: controlState.ambient },
     });
-    scene.sun.update({ sun: { intensity: controlState.sun } });
     bloom.update({ cityBloom: { intensity: controlState.bloom } });
     updateCity({ night });
     controls?.refresh();
@@ -195,11 +185,19 @@ export async function run(ctx: ExampleContext): Promise<ExampleRunResult> {
         view.toneMappingExposure = value;
       },
       setBloom: (value) => bloom.update({ cityBloom: { intensity: value } }),
-      setSun: (value) => scene.sun.update({ sun: { intensity: value } }),
-      setSky: (value) =>
-        scene.skyLightProbe.update({ skyLightProbe: { intensity: value } }),
-      setAmbient: (value) => fill.update({ ambient: { intensity: value } }),
-      setShadow: (value) => scene.sun.update({ sun: value }),
+      setAmbient: (value) =>
+        scene.aerialPerspective.update({
+          aerialPerspective: { ambientIntensity: value },
+        }),
+      setShadow: (value) => {
+        const { shadowIntensity, ...sunShadow } = value;
+        if (shadowIntensity !== undefined) {
+          scene.aerialPerspective.update({
+            aerialPerspective: { shadowIntensity },
+          });
+        }
+        scene.sun.update({ sun: sunShadow });
+      },
       setCity: updateCity,
       setQuality: (value) => {
         updateCity({ quality: value });
